@@ -14,39 +14,30 @@ import lombok.Setter;
 import java.time.LocalDateTime;
 
 /**
- * Entity ánh xạ bảng users – lưu thông tin tài khoản người dùng hệ thống.
+ * Entity ánh xạ bảng vehicle_types – danh mục loại phương tiện (ô tô, xe máy, ...).
  */
 @Entity
-@Table(name = "users")
+@Table(name = "vehicle_types")
 @Getter
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
-public class User {
+public class VehicleType {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "user_id")
-    private Long userId;
+    @Column(name = "vehicle_type_id")
+    private Long vehicleTypeId;
 
-    @Column(name = "full_name")
-    private String fullName;
+    @Column(name = "type_name")
+    private String typeName;
 
-    @Column(name = "phone")
-    private String phone;
+    @Column(name = "type_code")
+    private String typeCode;
 
-    @Column(name = "email")
-    private String email;
-
-    @Column(name = "password_hash")
-    private String passwordHash;
-
-    @Column(name = "status")
-    private String status;
+    @Column(name = "description")
+    private String description;
 
     @Column(name = "created_at")
     private LocalDateTime createdAt;
-
-    @Column(name = "updated_at")
-    private LocalDateTime updatedAt;
 }

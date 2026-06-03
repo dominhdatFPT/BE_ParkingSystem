@@ -5,6 +5,8 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -14,39 +16,29 @@ import lombok.Setter;
 import java.time.LocalDateTime;
 
 /**
- * Entity ánh xạ bảng users – lưu thông tin tài khoản người dùng hệ thống.
+ * Entity ánh xạ bảng customers – hồ sơ khách hàng gắn với một tài khoản User.
  */
 @Entity
-@Table(name = "users")
+@Table(name = "customers")
 @Getter
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
-public class User {
+public class Customer {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "user_id")
-    private Long userId;
+    @Column(name = "customer_id")
+    private Long customerId;
 
-    @Column(name = "full_name")
-    private String fullName;
+    // Mỗi customer thuộc về đúng một user trong hệ thống
+    @ManyToOne
+    @JoinColumn(name = "user_id")
+    private User user;
 
-    @Column(name = "phone")
-    private String phone;
-
-    @Column(name = "email")
-    private String email;
-
-    @Column(name = "password_hash")
-    private String passwordHash;
-
-    @Column(name = "status")
-    private String status;
+    @Column(name = "address")
+    private String address;
 
     @Column(name = "created_at")
     private LocalDateTime createdAt;
-
-    @Column(name = "updated_at")
-    private LocalDateTime updatedAt;
 }

@@ -14,32 +14,23 @@ import lombok.Setter;
 import java.time.LocalDateTime;
 
 /**
- * Entity ánh xạ bảng users – lưu thông tin tài khoản người dùng hệ thống.
+ * Entity ánh xạ bảng parking_facilities – bãi / khu vực đỗ xe.
  */
 @Entity
-@Table(name = "users")
+@Table(name = "parking_facilities")
 @Getter
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
-public class User {
+public class ParkingFacility {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "user_id")
-    private Long userId;
+    @Column(name = "parking_id")
+    private Long parkingId;
 
-    @Column(name = "full_name")
-    private String fullName;
-
-    @Column(name = "phone")
-    private String phone;
-
-    @Column(name = "email")
-    private String email;
-
-    @Column(name = "password_hash")
-    private String passwordHash;
+    @Column(name = "parking_name")
+    private String parkingName;
 
     @Column(name = "status")
     private String status;

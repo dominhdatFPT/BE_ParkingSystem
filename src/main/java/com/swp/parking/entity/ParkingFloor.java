@@ -5,6 +5,8 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -14,32 +16,37 @@ import lombok.Setter;
 import java.time.LocalDateTime;
 
 /**
- * Entity ánh xạ bảng users – lưu thông tin tài khoản người dùng hệ thống.
+ * Entity ánh xạ bảng parking_floors – tầng đỗ xe thuộc một bãi (parking facility).
  */
 @Entity
-@Table(name = "users")
+@Table(name = "parking_floors")
 @Getter
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
-public class User {
+public class ParkingFloor {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "user_id")
-    private Long userId;
+    @Column(name = "floor_id")
+    private Long floorId;
 
-    @Column(name = "full_name")
-    private String fullName;
+    // Tầng thuộc về một bãi đỗ xe
+    @ManyToOne
+    @JoinColumn(name = "parking_id")
+    private ParkingFacility parkingFacility;
 
-    @Column(name = "phone")
-    private String phone;
+    @Column(name = "floor_name")
+    private String floorName;
 
-    @Column(name = "email")
-    private String email;
+    @Column(name = "floor_number")
+    private Integer floorNumber;
 
-    @Column(name = "password_hash")
-    private String passwordHash;
+    @Column(name = "max_capacity")
+    private Integer maxCapacity;
+
+    @Column(name = "current_vehicle_count")
+    private Integer currentVehicleCount;
 
     @Column(name = "status")
     private String status;
