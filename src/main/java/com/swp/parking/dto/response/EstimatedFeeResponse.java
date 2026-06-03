@@ -23,4 +23,5 @@ public class EstimatedFeeResponse {
     private String vehicleTypeName;
     private BigDecimal estimatedFee;
     private LocalDateTime calculatedAt;
+    private String note;
 }

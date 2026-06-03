@@ -43,6 +43,12 @@ public class VehicleInfoService {
      * Ánh xạ một ParkingOrder sang VehicleInfoResponse cho client.
      */
     private VehicleInfoResponse mapToVehicleInfoResponse(ParkingOrder order) {
+        // Kiểm tra tầng đỗ: null thì gán giá trị mặc định
+        String floorName = order.getParkingFloor() != null
+                ? order.getParkingFloor().getFloorName() : "Chưa xác định";
+        Integer floorNumber = order.getParkingFloor() != null
+                ? order.getParkingFloor().getFloorNumber() : null;
+
         return VehicleInfoResponse.builder()
                 .licensePlate(order.getLicensePlate())
                 .brand(order.getVehicle().getBrand())
@@ -50,8 +56,8 @@ public class VehicleInfoService {
                 .vehicleTypeName(order.getVehicle().getVehicleType().getTypeName())
                 .parkingStatus(order.getParkingStatus())
                 .parkingName(order.getParkingFacility().getParkingName())
-                .floorName(order.getParkingFloor().getFloorName())
-                .floorNumber(order.getParkingFloor().getFloorNumber())
+                .floorName(floorName)
+                .floorNumber(floorNumber)
                 .entryTime(order.getEntryTime())
                 .build();
     }

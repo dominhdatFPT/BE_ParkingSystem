@@ -54,7 +54,9 @@ public class EstimatedFeeService {
         LocalDateTime now = LocalDateTime.now();
 
         // Thời lượng gửi xe tính từ entryTime đến hiện tại
-        long durationMinutes = ChronoUnit.MINUTES.between(order.getEntryTime(), now);
+        // entryTime null thì coi như 0 phút
+        long durationMinutes = order.getEntryTime() != null
+                ? ChronoUnit.MINUTES.between(order.getEntryTime(), now) : 0L;
         LocalTime currentTime = LocalTime.now();
 
         // Xác định loại ngày: cuối tuần hoặc ngày thường
@@ -84,6 +86,15 @@ public class EstimatedFeeService {
                 .map(r -> r.getPrice().multiply(BigDecimal.valueOf(durationMinutes)))
                 .orElse(BigDecimal.ZERO);
 
+        // Không khớp pricing rule – ghi log cảnh báo
+        if (!matched.isPresent()) {
+            log.warn("Không tìm thấy pricing rule phù hợp cho parkingId={}, vehicleTypeId={}, dayType={}, duration={}",
+                    parkingId, vehicleTypeId, dayType, durationMinutes);
+        }
+
+        // Ghi chú khi chưa có bảng giá phù hợp
+        String note = matched.isPresent() ? null : "Chưa có bảng giá phù hợp";
+
         return EstimatedFeeResponse.builder()
                 .licensePlate(order.getLicensePlate())
                 .entryTime(order.getEntryTime())
@@ -91,6 +102,7 @@ public class EstimatedFeeService {
                 .vehicleTypeName(order.getVehicle().getVehicleType().getTypeName())
                 .estimatedFee(estimatedFee)
                 .calculatedAt(now)
+                .note(note)
                 .build();
     }
 }

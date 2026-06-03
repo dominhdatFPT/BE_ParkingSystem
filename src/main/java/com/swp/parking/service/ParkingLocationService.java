@@ -47,13 +47,21 @@ public class ParkingLocationService {
         LocalDateTime now = LocalDateTime.now();
 
         // Thời lượng gửi xe tính bằng phút từ lúc vào bãi đến thời điểm hiện tại
-        long durationMinutes = ChronoUnit.MINUTES.between(order.getEntryTime(), now);
+        // entryTime null thì coi như 0 phút
+        long durationMinutes = order.getEntryTime() != null
+                ? ChronoUnit.MINUTES.between(order.getEntryTime(), now) : 0L;
+
+        // Kiểm tra tầng đỗ: null thì gán giá trị mặc định
+        String floorName = order.getParkingFloor() != null
+                ? order.getParkingFloor().getFloorName() : "Chưa xác định";
+        Integer floorNumber = order.getParkingFloor() != null
+                ? order.getParkingFloor().getFloorNumber() : null;
 
         return ParkingLocationResponse.builder()
                 .licensePlate(order.getLicensePlate())
                 .parkingName(order.getParkingFacility().getParkingName())
-                .floorName(order.getParkingFloor().getFloorName())
-                .floorNumber(order.getParkingFloor().getFloorNumber())
+                .floorName(floorName)
+                .floorNumber(floorNumber)
                 .entryTime(order.getEntryTime())
                 .durationMinutes(durationMinutes)
                 .build();
