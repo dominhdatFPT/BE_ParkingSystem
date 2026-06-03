@@ -1,8 +1,10 @@
 package com.swp.parking.controller;
 
 import com.swp.parking.dto.response.ApiResponse;
+import com.swp.parking.dto.response.EstimatedFeeResponse;
 import com.swp.parking.dto.response.ParkingLocationResponse;
 import com.swp.parking.dto.response.VehicleInfoResponse;
+import com.swp.parking.service.EstimatedFeeService;
 import com.swp.parking.service.ParkingLocationService;
 import com.swp.parking.service.VehicleInfoService;
 import lombok.RequiredArgsConstructor;
@@ -26,6 +28,7 @@ public class ParkingInfoController {
 
     private final VehicleInfoService vehicleInfoService;
     private final ParkingLocationService parkingLocationService;
+    private final EstimatedFeeService estimatedFeeService;
 
     /**
      * GET /api/parking/me/vehicles – danh sách xe đang gửi của user hiện tại.
@@ -59,5 +62,22 @@ public class ParkingInfoController {
 
         List<ParkingLocationResponse> locations = parkingLocationService.getParkingLocations(userId);
         return ResponseEntity.ok(ApiResponse.success(locations));
+    }
+
+    /**
+     * GET /api/parking/me/estimated-fees – phí ước tính cho từng đơn đỗ xe đang active.
+     */
+    @GetMapping("/estimated-fees")
+    public ResponseEntity<ApiResponse<List<EstimatedFeeResponse>>> getMyEstimatedFees() {
+        // Principal là userId đã được security layer gắn sau khi đăng nhập
+        Long userId = (Long) SecurityContextHolder
+                .getContext()
+                .getAuthentication()
+                .getPrincipal();
+
+        log.info("Yêu cầu phí ước tính, userId={}", userId);
+
+        List<EstimatedFeeResponse> fees = estimatedFeeService.getEstimatedFees(userId);
+        return ResponseEntity.ok(ApiResponse.success(fees));
     }
 }
