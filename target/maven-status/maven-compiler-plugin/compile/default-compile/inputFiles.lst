@@ -3,6 +3,7 @@ D:\IT_Code\FPTU_Subjects\Ky5_FPTU\SWP\BE_ParkingSystem\src\main\java\com\swp\par
 D:\IT_Code\FPTU_Subjects\Ky5_FPTU\SWP\BE_ParkingSystem\src\main\java\com\swp\parking\controller\ParkingInfoController.java
 D:\IT_Code\FPTU_Subjects\Ky5_FPTU\SWP\BE_ParkingSystem\src\main\java\com\swp\parking\controller\UserController.java
 D:\IT_Code\FPTU_Subjects\Ky5_FPTU\SWP\BE_ParkingSystem\src\main\java\com\swp\parking\dto\response\ApiResponse.java
+D:\IT_Code\FPTU_Subjects\Ky5_FPTU\SWP\BE_ParkingSystem\src\main\java\com\swp\parking\dto\response\ParkingLocationResponse.java
 D:\IT_Code\FPTU_Subjects\Ky5_FPTU\SWP\BE_ParkingSystem\src\main\java\com\swp\parking\dto\response\VehicleInfoResponse.java
 D:\IT_Code\FPTU_Subjects\Ky5_FPTU\SWP\BE_ParkingSystem\src\main\java\com\swp\parking\entity\Booking.java
 D:\IT_Code\FPTU_Subjects\Ky5_FPTU\SWP\BE_ParkingSystem\src\main\java\com\swp\parking\entity\Customer.java
@@ -21,5 +22,6 @@ D:\IT_Code\FPTU_Subjects\Ky5_FPTU\SWP\BE_ParkingSystem\src\main\java\com\swp\par
 D:\IT_Code\FPTU_Subjects\Ky5_FPTU\SWP\BE_ParkingSystem\src\main\java\com\swp\parking\repository\UserRepository.java
 D:\IT_Code\FPTU_Subjects\Ky5_FPTU\SWP\BE_ParkingSystem\src\main\java\com\swp\parking\service\AuthService.java
 D:\IT_Code\FPTU_Subjects\Ky5_FPTU\SWP\BE_ParkingSystem\src\main\java\com\swp\parking\service\BookingService.java
+D:\IT_Code\FPTU_Subjects\Ky5_FPTU\SWP\BE_ParkingSystem\src\main\java\com\swp\parking\service\ParkingLocationService.java
 D:\IT_Code\FPTU_Subjects\Ky5_FPTU\SWP\BE_ParkingSystem\src\main\java\com\swp\parking\service\VehicleInfoService.java
 D:\IT_Code\FPTU_Subjects\Ky5_FPTU\SWP\BE_ParkingSystem\src\main\java\com\swp\parking\SmartParkingApplication.java

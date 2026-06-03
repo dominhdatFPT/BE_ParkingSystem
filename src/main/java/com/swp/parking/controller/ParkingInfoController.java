@@ -1,7 +1,9 @@
 package com.swp.parking.controller;
 
 import com.swp.parking.dto.response.ApiResponse;
+import com.swp.parking.dto.response.ParkingLocationResponse;
 import com.swp.parking.dto.response.VehicleInfoResponse;
+import com.swp.parking.service.ParkingLocationService;
 import com.swp.parking.service.VehicleInfoService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -23,6 +25,7 @@ import java.util.List;
 public class ParkingInfoController {
 
     private final VehicleInfoService vehicleInfoService;
+    private final ParkingLocationService parkingLocationService;
 
     /**
      * GET /api/parking/me/vehicles – danh sách xe đang gửi của user hiện tại.
@@ -39,5 +42,22 @@ public class ParkingInfoController {
 
         List<VehicleInfoResponse> vehicles = vehicleInfoService.getActiveVehicles(userId);
         return ResponseEntity.ok(ApiResponse.success(vehicles));
+    }
+
+    /**
+     * GET /api/parking/me/locations – vị trí đỗ (tầng/bãi) và thời lượng gửi cho từng xe active.
+     */
+    @GetMapping("/locations")
+    public ResponseEntity<ApiResponse<List<ParkingLocationResponse>>> getMyParkingLocations() {
+        // Principal là userId đã được security layer gắn sau khi đăng nhập
+        Long userId = (Long) SecurityContextHolder
+                .getContext()
+                .getAuthentication()
+                .getPrincipal();
+
+        log.info("Yêu cầu vị trí đỗ xe, userId={}", userId);
+
+        List<ParkingLocationResponse> locations = parkingLocationService.getParkingLocations(userId);
+        return ResponseEntity.ok(ApiResponse.success(locations));
     }
 }
