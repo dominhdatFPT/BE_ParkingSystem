@@ -1,0 +1,22 @@
+spring:
+
+  application:
+    name: smart-parking
+  datasource:
+    url: jdbc:postgresql://aws-1-ap-southeast-2.pooler.supabase.com:6543/postgres?sslmode=require
+    username: postgres.qbwkzamzeyouunzopeip
+    password: Dat04022005@111
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    hibernate:
+      ddl-auto: none
+    show-sql: true
+    open-in-view: false
+    properties:
+      hibernate:
+        format_sql: true
+
+app:
+  jwt:
+    secret: SmartParkingSecretKey2024VeryLongSecretForHS256Algorithm
+    expiration: 86400000
