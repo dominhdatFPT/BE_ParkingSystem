@@ -11,35 +11,45 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 /**
- * Entity ánh xạ bảng users – lưu thông tin tài khoản người dùng hệ thống.
+ * Entity ánh xạ bảng employees – hồ sơ nhân viên gắn với một tài khoản User.
  */
 @Entity
-@Table(name = "users")
+@Table(name = "employees")
 @Getter
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
-public class User {
+public class Employee {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(name = "employee_id")
+    private Long employeeId;
+
     @Column(name = "user_id")
     private Long userId;
 
-    @Column(name = "full_name")
-    private String fullName;
+    @Column(name = "parking_id")
+    private Long parkingId;
 
-    @Column(name = "phone")
-    private String phone;
+    @Column(name = "manager_id")
+    private Long managerId;
 
-    @Column(name = "email")
-    private String email;
+    @Column(name = "employee_code")
+    private String employeeCode;
 
-    @Column(name = "password_hash")
-    private String passwordHash;
+    @Column(name = "role")
+    private String role;
+
+    @Column(name = "admin_code")
+    private String adminCode;
+
+    @Column(name = "salary")
+    private BigDecimal salary;
 
     @Column(name = "status")
     private String status;

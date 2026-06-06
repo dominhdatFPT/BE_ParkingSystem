@@ -1,10 +1,11 @@
 spring:
+
   application:
     name: smart-parking
   datasource:
-    url: ${SUPABASE_DB_URL}
-    username: ${SUPABASE_DB_USER}
-    password: ${SUPABASE_DB_PASSWORD}
+    url: jdbc:postgresql://aws-1-ap-southeast-2.pooler.supabase.com:6543/postgres?sslmode=require
+    username: postgres.qbwkzamzeyouunzopeip
+    password: Dat04022005@111
     driver-class-name: org.postgresql.Driver
   jpa:
     hibernate:
@@ -14,3 +15,8 @@ spring:
     properties:
       hibernate:
         format_sql: true
+
+app:
+  jwt:
+    secret: SmartParkingSecretKey2024VeryLongSecretForHS256Algorithm
+    expiration: 86400000
