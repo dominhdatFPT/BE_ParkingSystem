@@ -1,9 +1,11 @@
 package com.swp.parking.controller;
 
 import com.swp.parking.dto.request.LoginRequest;
+import com.swp.parking.dto.request.RegisterRequest;
 import com.swp.parking.dto.response.ApiResponse;
 import com.swp.parking.dto.response.LoginResponse;
 import com.swp.parking.service.AuthService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
@@ -28,6 +30,13 @@ public class AuthController {
         log.info("Yêu cầu đăng nhập, email={}", request.getEmail());
         LoginResponse response = authService.login(request);
         return ResponseEntity.ok(ApiResponse.success(response));
+    }
+
+    @PostMapping("/register")
+    public ResponseEntity<ApiResponse<String>> register(@Valid @RequestBody RegisterRequest request) {
+        log.info("Yêu cầu đăng ký tài khoản, email={}", request.getEmail());
+        String message = authService.register(request);
+        return ResponseEntity.ok(ApiResponse.success(message));
     }
 
     @PostMapping("/test-bcrypt")
