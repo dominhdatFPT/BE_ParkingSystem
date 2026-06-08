@@ -1,6 +1,9 @@
 package com.swp.parking.controller;
 
+
 import com.swp.parking.dto.request.ForgotPasswordRequest;
+import com.swp.parking.dto.request.FirebaseLoginRequest;
+
 import com.swp.parking.dto.request.LoginRequest;
 import com.swp.parking.dto.request.RegisterRequest;
 import com.swp.parking.dto.request.ResetPasswordRequest;
@@ -35,6 +38,7 @@ public class AuthController {
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 
+
     @PostMapping("/register")
     public ResponseEntity<ApiResponse<String>> register(@Valid @RequestBody RegisterRequest request) {
         log.info("Yêu cầu đăng ký tài khoản, email={}", request.getEmail());
@@ -60,7 +64,16 @@ public class AuthController {
     public ResponseEntity<ApiResponse<String>> resetPassword(@Valid @RequestBody ResetPasswordRequest request) {
         log.info("Đặt lại mật khẩu mới bằng resetToken={}", request.getResetToken());
         String message = authService.resetPassword(request);
-        return ResponseEntity.ok(ApiResponse.success(message));
+        return ResponseEntity.ok(ApiResponse.success(message));}
+    /**
+     * Đăng nhập Google: FE gửi Firebase ID Token, BE verify và trả JWT hệ thống.
+     */
+    @PostMapping("/google-login")
+    public ResponseEntity<ApiResponse<LoginResponse>> googleLogin(@RequestBody FirebaseLoginRequest request) {
+        log.info("Yêu cầu đăng nhập Google");
+        LoginResponse response = authService.loginWithGoogle(request);
+        return ResponseEntity.ok(ApiResponse.success(response));
+
     }
 
     @PostMapping("/test-bcrypt")
@@ -77,3 +90,4 @@ public class AuthController {
         return ResponseEntity.ok(hash);
     }
 }
+
