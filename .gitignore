@@ -1,0 +1,8 @@
+/target/
+temp-register.json
+# Chặn thư mục cấu hình của IntelliJ IDEA / Eclipse
+.idea/
+*.iml
+
+# Chặn node_modules nếu có tích hợp FE chạy kèm ở đây
+node_modules

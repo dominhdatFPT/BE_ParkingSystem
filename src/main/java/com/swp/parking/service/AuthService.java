@@ -4,24 +4,34 @@ import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseAuthException;
 import com.google.firebase.auth.FirebaseToken;
 import com.swp.parking.dto.request.FirebaseLoginRequest;
+import com.swp.parking.dto.request.ForgotPasswordRequest;
 import com.swp.parking.dto.request.LoginRequest;
+import com.swp.parking.dto.request.RegisterRequest;
+import com.swp.parking.dto.request.ResetPasswordRequest;
+import com.swp.parking.dto.request.VerifyOtpRequest;
 import com.swp.parking.dto.response.LoginResponse;
 import com.swp.parking.entity.Customer;
 import com.swp.parking.entity.Employee;
+import com.swp.parking.entity.PasswordResetToken;
 import com.swp.parking.entity.User;
 import com.swp.parking.exception.ResourceNotFoundException;
 import com.swp.parking.repository.CustomerRepository;
 import com.swp.parking.repository.EmployeeRepository;
+import com.swp.parking.repository.PasswordResetTokenRepository;
 import com.swp.parking.repository.UserRepository;
 import com.swp.parking.security.JwtTokenProvider;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.UUID;
+import java.time.LocalDateTime;
+import java.util.UUID;
+import java.util.concurrent.ThreadLocalRandom;
 
 /**
  * Service xử lý xác thực: đăng nhập customer và employee bằng email + mật khẩu.
@@ -34,6 +44,7 @@ public class AuthService {
     private final UserRepository userRepository;
     private final CustomerRepository customerRepository;
     private final EmployeeRepository employeeRepository;
+    private final PasswordResetTokenRepository passwordResetTokenRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtTokenProvider jwtTokenProvider;
 
@@ -154,6 +165,99 @@ public class AuthService {
                     .build();
         } catch (FirebaseAuthException ex) {
             throw new BadCredentialsException("Token Firebase không hợp lệ");
+        }
+    }
+
+    public Long requestPasswordReset(ForgotPasswordRequest request) {
+        User user = userRepository.findByEmail(request.getEmail())
+                .orElseThrow(() -> new ResourceNotFoundException("Email không tồn tại"));
+
+        String otpCode = generateOtpCode();
+        PasswordResetToken token = new PasswordResetToken();
+        token.setUser(user);
+        token.setOtpCode(otpCode);
+        token.setVerified(false);
+        token.setUsed(false);
+        token.setCreatedAt(LocalDateTime.now());
+        token.setExpiresAt(LocalDateTime.now().plusMinutes(5));
+
+        PasswordResetToken savedToken = passwordResetTokenRepository.save(token);
+
+        log.info("OTP quên mật khẩu cho email={} là {} (thời hạn 5 phút)", user.getEmail(), otpCode);
+
+        return savedToken.getTokenId();
+    }
+
+    public String verifyPasswordResetOtp(VerifyOtpRequest request) {
+        PasswordResetToken token = passwordResetTokenRepository
+                .findByTokenIdAndOtpCodeAndExpiresAtAfterAndUsedFalse(request.getRequestId(), request.getOtp(), LocalDateTime.now())
+                .orElseThrow(() -> new BadCredentialsException("OTP không đúng hoặc đã hết hạn"));
+
+        if (Boolean.TRUE.equals(token.getVerified())) {
+            throw new IllegalArgumentException("OTP đã được xác thực");
+        }
+
+        token.setVerified(true);
+        token.setResetToken(UUID.randomUUID().toString());
+        token.setExpiresAt(LocalDateTime.now().plusMinutes(10));
+        passwordResetTokenRepository.save(token);
+
+        log.info("Đã xác thực OTP quên mật khẩu cho email={}", token.getUser().getEmail());
+        return token.getResetToken();
+    }
+
+    public String resetPassword(ResetPasswordRequest request) {
+        PasswordResetToken token = passwordResetTokenRepository
+                .findByResetTokenAndVerifiedTrueAndUsedFalseAndExpiresAtAfter(request.getResetToken(), LocalDateTime.now())
+                .orElseThrow(() -> new BadCredentialsException("Yêu cầu đặt lại mật khẩu không hợp lệ hoặc đã hết hạn"));
+
+        User user = token.getUser();
+        user.setPasswordHash(passwordEncoder.encode(request.getNewPassword()));
+        user.setUpdatedAt(LocalDateTime.now());
+        userRepository.save(user);
+
+        token.setUsed(true);
+        passwordResetTokenRepository.save(token);
+
+        log.info("Đặt lại mật khẩu thành công cho email={}", user.getEmail());
+        return "Đặt lại mật khẩu thành công";
+    }
+
+    private String generateOtpCode() {
+        int otp = ThreadLocalRandom.current().nextInt(100000, 1000000);
+        return String.valueOf(otp);
+    }
+
+    public String register(RegisterRequest request) {
+        if (userRepository.findByEmail(request.getEmail()).isPresent()) {
+            throw new IllegalArgumentException("Email đã được đăng ký");
+        }
+        if (userRepository.findByPhone(request.getPhone()).isPresent()) {
+            throw new IllegalArgumentException("Số điện thoại đã được sử dụng");
+        }
+
+        User user = new User();
+        user.setFullName(request.getFullName());
+        user.setEmail(request.getEmail());
+        user.setPhone(request.getPhone());
+        user.setPasswordHash(passwordEncoder.encode(request.getPassword()));
+        user.setStatus("ACTIVE");
+        user.setCreatedAt(LocalDateTime.now());
+        user.setUpdatedAt(LocalDateTime.now());
+
+        try {
+            User savedUser = userRepository.saveAndFlush(user);
+
+            Customer customer = new Customer();
+            customer.setUser(savedUser);
+            customer.setAddress(request.getAddress());
+            customer.setCreatedAt(LocalDateTime.now());
+            customerRepository.save(customer);
+
+            log.info("Đăng ký thành công, userId={}, email={}", savedUser.getUserId(), savedUser.getEmail());
+            return "Đăng ký tài khoản thành công";
+        } catch (DataIntegrityViolationException ex) {
+            throw new IllegalArgumentException("Dữ liệu đăng ký không hợp lệ hoặc đã tồn tại");
         }
     }
 }
