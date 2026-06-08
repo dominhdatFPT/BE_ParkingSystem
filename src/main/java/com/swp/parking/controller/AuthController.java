@@ -1,7 +1,10 @@
 package com.swp.parking.controller;
 
+import com.swp.parking.dto.request.ForgotPasswordRequest;
 import com.swp.parking.dto.request.LoginRequest;
 import com.swp.parking.dto.request.RegisterRequest;
+import com.swp.parking.dto.request.ResetPasswordRequest;
+import com.swp.parking.dto.request.VerifyOtpRequest;
 import com.swp.parking.dto.response.ApiResponse;
 import com.swp.parking.dto.response.LoginResponse;
 import com.swp.parking.service.AuthService;
@@ -36,6 +39,27 @@ public class AuthController {
     public ResponseEntity<ApiResponse<String>> register(@Valid @RequestBody RegisterRequest request) {
         log.info("Yêu cầu đăng ký tài khoản, email={}", request.getEmail());
         String message = authService.register(request);
+        return ResponseEntity.ok(ApiResponse.success(message));
+    }
+
+    @PostMapping("/forgot-password")
+    public ResponseEntity<ApiResponse<Long>> forgotPassword(@Valid @RequestBody ForgotPasswordRequest request) {
+        log.info("Yêu cầu quên mật khẩu, email={}", request.getEmail());
+        Long requestId = authService.requestPasswordReset(request);
+        return ResponseEntity.ok(ApiResponse.success(requestId));
+    }
+
+    @PostMapping("/verify-forgot-password-otp")
+    public ResponseEntity<ApiResponse<String>> verifyForgotPasswordOtp(@Valid @RequestBody VerifyOtpRequest request) {
+        log.info("Xác thực OTP quên mật khẩu, requestId={}", request.getRequestId());
+        String resetToken = authService.verifyPasswordResetOtp(request);
+        return ResponseEntity.ok(ApiResponse.success(resetToken));
+    }
+
+    @PostMapping("/reset-password")
+    public ResponseEntity<ApiResponse<String>> resetPassword(@Valid @RequestBody ResetPasswordRequest request) {
+        log.info("Đặt lại mật khẩu mới bằng resetToken={}", request.getResetToken());
+        String message = authService.resetPassword(request);
         return ResponseEntity.ok(ApiResponse.success(message));
     }
 
