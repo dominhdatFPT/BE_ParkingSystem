@@ -1,5 +1,6 @@
 package com.swp.parking.controller;
 
+import com.swp.parking.dto.request.FirebaseLoginRequest;
 import com.swp.parking.dto.request.LoginRequest;
 import com.swp.parking.dto.response.ApiResponse;
 import com.swp.parking.dto.response.LoginResponse;
@@ -27,6 +28,16 @@ public class AuthController {
     public ResponseEntity<ApiResponse<LoginResponse>> login(@RequestBody LoginRequest request) {
         log.info("Yêu cầu đăng nhập, email={}", request.getEmail());
         LoginResponse response = authService.login(request);
+        return ResponseEntity.ok(ApiResponse.success(response));
+    }
+
+    /**
+     * Đăng nhập Google: FE gửi Firebase ID Token, BE verify và trả JWT hệ thống.
+     */
+    @PostMapping("/google-login")
+    public ResponseEntity<ApiResponse<LoginResponse>> googleLogin(@RequestBody FirebaseLoginRequest request) {
+        log.info("Yêu cầu đăng nhập Google");
+        LoginResponse response = authService.loginWithGoogle(request);
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 
