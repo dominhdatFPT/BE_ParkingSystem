@@ -3,157 +3,135 @@ package com.swp.parking.service;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseAuthException;
 import com.google.firebase.auth.FirebaseToken;
-import com.swp.parking.dto.request.FirebaseLoginRequest;
+import com.swp.parking.config.JwtConfig;
+import com.swp.parking.dto.request.GoogleLoginRequest;
 import com.swp.parking.dto.request.LoginRequest;
-import com.swp.parking.dto.response.LoginResponse;
-import com.swp.parking.entity.Customer;
-import com.swp.parking.entity.Employee;
-import com.swp.parking.entity.User;
-import com.swp.parking.exception.ResourceNotFoundException;
-import com.swp.parking.repository.CustomerRepository;
-import com.swp.parking.repository.EmployeeRepository;
+import com.swp.parking.dto.request.RegisterRequest;
+import com.swp.parking.dto.response.AuthResponse;
+import com.swp.parking.exception.AppException;
+import com.swp.parking.model.User;
+import com.swp.parking.model.enums.UserRole;
 import com.swp.parking.repository.UserRepository;
-import com.swp.parking.security.JwtTokenProvider;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.UUID;
 
-/**
- * Service xử lý xác thực: đăng nhập customer và employee bằng email + mật khẩu.
- */
 @Service
 @RequiredArgsConstructor
+@Transactional
 @Slf4j
 public class AuthService {
 
     private final UserRepository userRepository;
-    private final CustomerRepository customerRepository;
-    private final EmployeeRepository employeeRepository;
     private final PasswordEncoder passwordEncoder;
-    private final JwtTokenProvider jwtTokenProvider;
+    private final JwtConfig jwtConfig;
 
-    /**
-     * Đăng nhập bằng email/mật khẩu, xác định role (CUSTOMER hoặc employee role) và trả JWT.
-     */
-    public LoginResponse login(LoginRequest request) {
+    public AuthResponse login(LoginRequest request) {
         User user = userRepository.findByEmail(request.getEmail())
-                .orElseThrow(() -> new ResourceNotFoundException("Email không tồn tại"));
+                .orElseThrow(() -> new AppException(HttpStatus.NOT_FOUND, "Email not found"));
 
-        if (!passwordEncoder.matches(request.getPassword(), user.getPasswordHash())) {
-            throw new BadCredentialsException("Mật khẩu không đúng");
+        if (user.getPassword() == null || user.getPassword().isBlank()) {
+            throw new AppException(HttpStatus.BAD_REQUEST,
+                    "This account uses Google sign-in. Please log in with Google.");
         }
 
-        if (!"ACTIVE".equals(user.getStatus())) {
-            throw new RuntimeException("Tài khoản đã bị khóa");
+        if (!passwordEncoder.matches(request.getPassword(), user.getPassword())) {
+            throw new AppException(HttpStatus.BAD_REQUEST, "Invalid password");
         }
 
-        String role;
-        Long customerId = null;
-        Long employeeId = null;
+        user.setRole(resolveRole(user.getId()));
+        String token = jwtConfig.generateToken(user.getId(), user.getRole().name());
 
-        Customer customer = customerRepository.findByUser_UserId(user.getUserId()).orElse(null);
-        if (customer != null) {
-            role = "CUSTOMER";
-            customerId = customer.getCustomerId();
-        } else {
-            Employee employee = employeeRepository.findByUserId(user.getUserId())
-                    .orElseThrow(() -> new ResourceNotFoundException("Tài khoản không hợp lệ"));
-            role = employee.getRole();
-            employeeId = employee.getEmployeeId();
+        return mapToAuthResponse(user, token);
+    }
+
+    public AuthResponse register(RegisterRequest request) {
+        if (userRepository.existsByEmail(request.getEmail())) {
+            throw new AppException(HttpStatus.CONFLICT, "Email already exists");
         }
 
-        String token = jwtTokenProvider.generateToken(user.getUserId(), role);
+        User user = User.builder()
+                .fullName(request.getFullName())
+                .email(request.getEmail())
+                .password(passwordEncoder.encode(request.getPassword()))
+                .role(UserRole.USER)
+                .build();
 
-        log.info("Đăng nhập thành công, userId={}, role={}", user.getUserId(), role);
+        user = userRepository.save(user);
+        user.setRole(UserRole.USER);
 
-        return LoginResponse.builder()
+        // TODO: Gửi push notification chào mừng qua Firebase Admin SDK
+        String token = jwtConfig.generateToken(user.getId(), user.getRole().name());
+
+        return mapToAuthResponse(user, token);
+    }
+
+    public AuthResponse googleLogin(GoogleLoginRequest request) {
+        FirebaseToken decodedToken;
+        try {
+            decodedToken = FirebaseAuth.getInstance()
+                    .verifyIdToken(request.getIdToken());
+        } catch (FirebaseAuthException ex) {
+            log.warn("Firebase ID token verification failed: {}", ex.getMessage());
+            throw new AppException(HttpStatus.UNAUTHORIZED,
+                    "Invalid or expired Google ID token");
+        } catch (IllegalStateException ex) {
+            log.error("Firebase is not initialized. Check firebase-service-account.json on classpath.", ex);
+            throw new AppException(HttpStatus.INTERNAL_SERVER_ERROR,
+                    "Firebase is not configured on the server");
+        }
+
+        String email = decodedToken.getEmail();
+        if (email == null || email.isBlank()) {
+            throw new AppException(HttpStatus.BAD_REQUEST,
+                    "Google account does not expose an email address");
+        }
+
+        User user = findOrCreateGoogleUser(email, decodedToken.getName());
+        user.setRole(resolveRole(user.getId()));
+
+        String token = jwtConfig.generateToken(user.getId(), user.getRole().name());
+        return mapToAuthResponse(user, token);
+    }
+
+    private User findOrCreateGoogleUser(String email, String fullName) {
+        return userRepository.findByEmail(email)
+                .orElseGet(() -> {
+                    String safeName = (fullName == null || fullName.isBlank())
+                            ? email.split("@")[0]
+                            : fullName;
+                    String placeholderHash = passwordEncoder.encode(UUID.randomUUID().toString());
+                    User newUser = User.builder()
+                            .email(email)
+                            .fullName(safeName)
+                            .password(placeholderHash)
+                            .role(UserRole.USER)
+                            .build();
+                    log.info("Creating new user from Google login: {}", email);
+                    return userRepository.save(newUser);
+                });
+    }
+
+    private AuthResponse mapToAuthResponse(User user, String token) {
+        return AuthResponse.builder()
                 .token(token)
                 .tokenType("Bearer")
-                .userId(user.getUserId())
+                .userId(user.getId())
                 .fullName(user.getFullName())
                 .email(user.getEmail())
-                .role(role)
-                .customerId(customerId)
-                .employeeId(employeeId)
+                .role(user.getRole())
                 .build();
     }
 
-    /**
-     * Đăng nhập bằng Google qua Firebase ID Token.
-     * Verify token → tìm hoặc tạo user/customer → trả JWT hệ thống.
-     */
-    @Transactional
-    public LoginResponse loginWithGoogle(FirebaseLoginRequest request) {
-        try {
-            // Bước 1: Xác thực Firebase ID Token từ FE
-            FirebaseToken decodedToken = FirebaseAuth.getInstance().verifyIdToken(request.getIdToken());
-            String email = decodedToken.getEmail();
-            String name = decodedToken.getName();
-
-            if (email == null || email.isBlank()) {
-                throw new BadCredentialsException("Email không có trong token Firebase");
-            }
-
-            // Bước 2: Tìm user theo email trong DB
-            User user = userRepository.findByEmail(email).orElse(null);
-
-            // Bước 3: Nếu chưa có user → tự động tạo User + Customer mới
-            if (user == null) {
-                user = new User();
-                user.setEmail(email);
-                user.setFullName(name != null ? name : email);
-                user.setStatus("ACTIVE");
-                // Mật khẩu ngẫu nhiên vì đăng nhập qua Google, không dùng password
-                user.setPasswordHash(UUID.randomUUID().toString());
-                user = userRepository.save(user);
-
-                Customer newCustomer = new Customer();
-                newCustomer.setUser(user);
-                customerRepository.save(newCustomer);
-            }
-
-            if (!"ACTIVE".equals(user.getStatus())) {
-                throw new RuntimeException("Tài khoản đã bị khóa");
-            }
-
-            // Bước 4: Xác định role – tìm trong bảng customers
-            String role;
-            Long customerId = null;
-            Long employeeId = null;
-
-            Customer customer = customerRepository.findByUser_UserId(user.getUserId()).orElse(null);
-            if (customer != null) {
-                role = "CUSTOMER";
-                customerId = customer.getCustomerId();
-            } else {
-                Employee employee = employeeRepository.findByUserId(user.getUserId())
-                        .orElseThrow(() -> new ResourceNotFoundException("Tài khoản không hợp lệ"));
-                role = employee.getRole();
-                employeeId = employee.getEmployeeId();
-            }
-
-            // Bước 5: Tạo JWT token hệ thống và trả về LoginResponse
-            String token = jwtTokenProvider.generateToken(user.getUserId(), role);
-
-            log.info("Đăng nhập Google thành công, userId={}, role={}", user.getUserId(), role);
-
-            return LoginResponse.builder()
-                    .token(token)
-                    .tokenType("Bearer")
-                    .userId(user.getUserId())
-                    .fullName(user.getFullName())
-                    .email(user.getEmail())
-                    .role(role)
-                    .customerId(customerId)
-                    .employeeId(employeeId)
-                    .build();
-        } catch (FirebaseAuthException ex) {
-            throw new BadCredentialsException("Token Firebase không hợp lệ");
-        }
+    private UserRole resolveRole(Long userId) {
+        return userRepository.findActiveEmployeeRoleByUserId(userId)
+                .filter(role -> "ADMIN".equalsIgnoreCase(role))
+                .map(role -> UserRole.ADMIN)
+                .orElse(UserRole.USER);
     }
 }

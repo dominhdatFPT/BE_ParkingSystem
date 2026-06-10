@@ -1,70 +1,56 @@
 package com.swp.parking.exception;
 
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.validation.FieldError;
+import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 import java.time.LocalDateTime;
+import java.util.HashMap;
+import java.util.Map;
 
-/**
- * Bắt và chuyển đổi exception toàn cục thành HTTP response chuẩn.
- */
 @RestControllerAdvice
+@Slf4j
 public class GlobalExceptionHandler {
 
-    /**
-     * Xử lý khi không tìm thấy tài nguyên – trả 404.
-     */
-    @ExceptionHandler(ResourceNotFoundException.class)
-    public ResponseEntity<ErrorResponse> handleResourceNotFound(ResourceNotFoundException ex) {
-        ErrorResponse error = new ErrorResponse(
-                HttpStatus.NOT_FOUND.value(),
-                ex.getMessage(),
-                LocalDateTime.now()
-        );
-        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(error);
+    @ExceptionHandler(MethodArgumentNotValidException.class)
+    public ResponseEntity<Map<String, Object>> handleValidation(MethodArgumentNotValidException ex) {
+        Map<String, String> fieldErrors = new HashMap<>();
+        for (FieldError error : ex.getBindingResult().getFieldErrors()) {
+            fieldErrors.put(error.getField(), error.getDefaultMessage());
+        }
+
+        Map<String, Object> body = new HashMap<>();
+        body.put("status", HttpStatus.BAD_REQUEST.value());
+        body.put("message", "Validation failed");
+        body.put("errors", fieldErrors);
+        body.put("timestamp", LocalDateTime.now());
+
+        return ResponseEntity.badRequest().body(body);
     }
 
-    /**
-     * Trả về 400 khi sai mật khẩu.
-     */
-    @ExceptionHandler(BadCredentialsException.class)
-    public ResponseEntity<ErrorResponse> handleBadCredentials(BadCredentialsException ex) {
-        // Trả về 400 khi sai mật khẩu
-        ErrorResponse error = new ErrorResponse(
-                HttpStatus.BAD_REQUEST.value(),
-                ex.getMessage(),
-                LocalDateTime.now()
-        );
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error);
+    @ExceptionHandler(AppException.class)
+    public ResponseEntity<Map<String, Object>> handleAppException(AppException ex) {
+        log.warn("AppException [{}]: {}", ex.getStatus(), ex.getMessage());
+        Map<String, Object> body = new HashMap<>();
+        body.put("status", ex.getStatus().value());
+        body.put("message", ex.getMessage());
+        body.put("timestamp", LocalDateTime.now());
+
+        return ResponseEntity.status(ex.getStatus()).body(body);
     }
 
-    /**
-     * Trả về 403 khi tài khoản bị khóa.
-     */
-    @ExceptionHandler(RuntimeException.class)
-    public ResponseEntity<ErrorResponse> handleRuntime(RuntimeException ex) {
-        // Trả về 403 khi tài khoản bị khóa
-        ErrorResponse error = new ErrorResponse(
-                HttpStatus.FORBIDDEN.value(),
-                ex.getMessage(),
-                LocalDateTime.now()
-        );
-        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(error);
-    }
-
-    /**
-     * Xử lý mọi lỗi không lường trước – trả 500.
-     */
     @ExceptionHandler(Exception.class)
-    public ResponseEntity<ErrorResponse> handleGeneralException(Exception ex) {
-        ErrorResponse error = new ErrorResponse(
-                HttpStatus.INTERNAL_SERVER_ERROR.value(),
-                ex.getMessage(),
-                LocalDateTime.now()
-        );
-        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(error);
+    public ResponseEntity<Map<String, Object>> handleGeneralException(Exception ex) {
+        log.error("Unhandled exception: {}", ex.getMessage(), ex);
+        Map<String, Object> body = new HashMap<>();
+        body.put("status", HttpStatus.INTERNAL_SERVER_ERROR.value());
+        body.put("message", ex.getMessage() != null ? ex.getMessage() : "Internal server error");
+        body.put("timestamp", LocalDateTime.now());
+
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(body);
     }
 }
