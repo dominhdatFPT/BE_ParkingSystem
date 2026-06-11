@@ -3,6 +3,7 @@ package com.swp.parking.service;
 import com.swp.parking.dto.response.UserResponse;
 import com.swp.parking.exception.AppException;
 import com.swp.parking.model.User;
+import com.swp.parking.model.enums.UserRole;
 import com.swp.parking.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -31,7 +32,13 @@ public class UserService {
     public UserResponse getUserById(Long id) {
         User user = userRepository.findById(id)
                 .orElseThrow(() -> new AppException(HttpStatus.NOT_FOUND, "User not found"));
+        user.setRole(resolveRole(user.getId()));
         return mapToResponse(user);
+    }
+
+    @Transactional(readOnly = true)
+    public UserResponse getCurrentUser(Long id) {
+        return getUserById(id);
     }
 
     public UserResponse createUser(User user) {
@@ -71,5 +78,12 @@ public class UserService {
                 .createdAt(user.getCreatedAt())
                 .updatedAt(user.getUpdatedAt())
                 .build();
+    }
+
+    private UserRole resolveRole(Long userId) {
+        return userRepository.findActiveEmployeeRoleByUserId(userId)
+                .filter(role -> "ADMIN".equalsIgnoreCase(role))
+                .map(role -> UserRole.ADMIN)
+                .orElse(UserRole.USER);
     }
 }
