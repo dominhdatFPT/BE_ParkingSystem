@@ -24,4 +24,20 @@ public interface ParkingOrderRepository extends JpaRepository<ParkingOrder, Long
         ORDER BY po.entryTime DESC
         """)
     List<ParkingOrder> findAllActiveByUserId(@Param("userId") Long userId);
+
+    @Query("""
+        SELECT COUNT(po)
+        FROM ParkingOrder po
+        JOIN po.vehicle v
+        JOIN v.vehicleType vt
+        WHERE po.parkingFacility.id = :parkingId
+          AND po.parkingFloor.id = :floorId
+          AND vt.id = :vehicleTypeId
+          AND po.parkingStatus = 'ACTIVE'
+        """)
+    long countActiveVehicles(
+            @Param("parkingId") Long parkingId,
+            @Param("floorId") Long floorId,
+            @Param("vehicleTypeId") Long vehicleTypeId
+    );
 }

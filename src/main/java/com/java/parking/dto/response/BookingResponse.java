@@ -19,9 +19,20 @@ public class BookingResponse {
     private String userFullName;
     private Long parkingSlotId;
     private String slotNumber;
+    private Long parkingId;
+    private String parkingName;
+    private Long floorId;
+    private String floorName;
+    private Long vehicleTypeId;
+    private String vehicleTypeName;
+    private Long zoneId;
+    private String zoneName;
     private LocalDateTime startTime;
     private LocalDateTime endTime;
     private BookingStatus status;
+    private Long acceptedBy;
+    private String acceptedByName;
+    private LocalDateTime acceptedAt;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }
