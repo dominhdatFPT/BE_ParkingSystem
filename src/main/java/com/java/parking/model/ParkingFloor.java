@@ -26,6 +26,13 @@ public class ParkingFloor {
     @Column(name = "floor_name", nullable = false)
     private String floorName;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "parking_id")
+    private ParkingFacility parkingFacility;
+
+    @Column(name = "floor_number")
+    private Integer floorNumber;
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
