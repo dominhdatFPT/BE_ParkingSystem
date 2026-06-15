@@ -18,6 +18,7 @@ public interface ParkingOrderRepository extends JpaRepository<ParkingOrder, Long
         JOIN FETCH v.customer c
         JOIN FETCH v.vehicleType vt
         JOIN FETCH po.parkingFacility pf
+        LEFT JOIN FETCH pf.building b
         JOIN FETCH po.parkingFloor pfl
         WHERE c.user.id = :userId
           AND po.parkingStatus = 'ACTIVE'

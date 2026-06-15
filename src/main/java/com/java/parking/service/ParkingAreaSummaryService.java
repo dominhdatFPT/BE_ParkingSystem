@@ -21,7 +21,7 @@ public class ParkingAreaSummaryService {
                 SELECT area_id, building_code, building_name, floor_number, area_code,
                        vehicle_type, capacity, current_vehicle_count
                 FROM parking_area_counts
-                WHERE 1 = 1
+                WHERE building_code IN ('LK', 'BH')
                 """);
         List<Object> params = new ArrayList<>();
 

@@ -11,24 +11,32 @@ import org.hibernate.annotations.UpdateTimestamp;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "parking_facilities")
+@Table(name = "buildings")
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class ParkingFacility {
+public class Building {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "parking_id")
+    @Column(name = "building_id")
     private Long id;
 
-    @Column(name = "parking_name", nullable = false)
-    private String parkingName;
+    @Column(name = "building_name", nullable = false)
+    private String buildingName;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "building_id")
-    private Building building;
+    @Column(name = "address")
+    private String address;
+
+    @Column(name = "phone")
+    private String phone;
+
+    @Column(name = "email")
+    private String email;
+
+    @Column(name = "status")
+    private String status;
 
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
