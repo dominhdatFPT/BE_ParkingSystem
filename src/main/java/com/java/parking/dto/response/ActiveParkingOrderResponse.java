@@ -5,7 +5,6 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 @Data
@@ -15,11 +14,14 @@ import java.time.LocalDateTime;
 public class ActiveParkingOrderResponse {
 
     private Long orderId;
+    private String status;
     private String licensePlate;
-    private String vehicleTypeName;
-    private String parkingName;
+    private String vehicleType;
+    private String facilityName;
+    private String facilityAddress;
     private String floorName;
+    private String slotNumber;
     private LocalDateTime entryTime;
-    private BigDecimal calculatedFee;
-    private String parkingStatus;
+    private Long durationMinutes;
+    private Double currentFee;
 }
