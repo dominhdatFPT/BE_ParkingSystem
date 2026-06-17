@@ -44,7 +44,7 @@ public class VehicleRegistrationController {
     }
 
     @PostMapping
-    @PreAuthorize("hasRole('USER')")
+    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<ApiResponse<VehicleRegistrationResponse>> createRegistration(
             @Valid @RequestBody VehicleRegistrationRequest body) {
         VehicleRegistrationResponse result = service.createRegistration(getCurrentUserId(), body);
@@ -53,7 +53,7 @@ public class VehicleRegistrationController {
     }
 
     @GetMapping("/my")
-    @PreAuthorize("hasRole('USER')")
+    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<ApiResponse<List<VehicleRegistrationResponse>>> getMyRegistrations() {
         return ResponseEntity.ok(ApiResponse.success(service.getMyRegistrations(getCurrentUserId())));
     }
