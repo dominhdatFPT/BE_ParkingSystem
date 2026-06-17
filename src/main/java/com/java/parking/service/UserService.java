@@ -82,8 +82,17 @@ public class UserService {
 
     private UserRole resolveRole(Long userId) {
         return userRepository.findActiveEmployeeRoleByUserId(userId)
-                .filter(role -> "ADMIN".equalsIgnoreCase(role))
-                .map(role -> UserRole.ADMIN)
+                .map(String::toUpperCase)
+                .map(role -> {
+                    if ("SECURITY".equals(role) || "CASHIER".equals(role)) {
+                        return UserRole.STAFF;
+                    }
+                    try {
+                        return UserRole.valueOf(role);
+                    } catch (IllegalArgumentException ex) {
+                        return UserRole.USER;
+                    }
+                })
                 .orElse(UserRole.USER);
     }
 }
