@@ -1,6 +1,7 @@
 package com.swp.parking.model;
 
 import com.swp.parking.model.enums.BookingStatus;
+import com.swp.parking.model.enums.PaymentStatus;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -42,6 +43,10 @@ public class Booking {
     private ParkingSlot parkingSlot;
 
     @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "card_id")
+    private Card card;
+
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "parking_id")
     private ParkingFacility parkingFacility;
 
@@ -67,12 +72,25 @@ public class Booking {
     @Column(nullable = false)
     private BookingStatus status;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "payment_status", nullable = false)
+    private PaymentStatus paymentStatus;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "accepted_by")
     private User acceptedBy;
 
     @Column(name = "accepted_at")
     private LocalDateTime acceptedAt;
+
+    @Column(name = "staff_note")
+    private String staffNote;
+
+    @Column(name = "rejected_at")
+    private LocalDateTime rejectedAt;
+
+    @Column(name = "paid_at")
+    private LocalDateTime paidAt;
 
     @CreationTimestamp
     @Column(nullable = false, updatable = false)

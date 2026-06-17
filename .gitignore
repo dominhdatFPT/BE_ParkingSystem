@@ -12,6 +12,8 @@ package-lock.json
 # Environment & secrets
 .env
 *.log
+secrets/
+google-vision-service-account.json
 
 # OS
 .DS_Store

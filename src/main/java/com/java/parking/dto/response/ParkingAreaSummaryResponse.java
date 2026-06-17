@@ -19,5 +19,7 @@ public class ParkingAreaSummaryResponse {
     private String vehicleType;
     private Integer capacity;
     private Integer currentVehicleCount;
+    private Integer availableCount;
+    private Integer maintenanceCount;
     private Integer occupancyPercent;
 }

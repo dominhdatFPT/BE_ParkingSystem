@@ -22,18 +22,54 @@ public interface BookingRepository extends JpaRepository<Booking, Long> {
 
     List<Booking> findByStatusOrderByCreatedAtAsc(BookingStatus status);
 
+    List<Booking> findByUserIdOrderByCreatedAtDesc(Long userId);
+
     long countByParkingZoneIdAndStatusIn(Long parkingZoneId, List<BookingStatus> statuses);
 
     @Query("""
         SELECT b
         FROM Booking b
         LEFT JOIN FETCH b.user
+        LEFT JOIN FETCH b.card
+        LEFT JOIN FETCH b.parkingSlot
         LEFT JOIN FETCH b.parkingFacility
         LEFT JOIN FETCH b.parkingFloor
         LEFT JOIN FETCH b.vehicleType
         LEFT JOIN FETCH b.parkingZone
+        LEFT JOIN FETCH b.acceptedBy
         WHERE b.status = :status
         ORDER BY b.createdAt ASC
         """)
     List<Booking> findAllByStatusWithDetails(@Param("status") BookingStatus status);
+
+    @Query("""
+        SELECT b
+        FROM Booking b
+        LEFT JOIN FETCH b.user
+        LEFT JOIN FETCH b.card
+        LEFT JOIN FETCH b.parkingSlot
+        LEFT JOIN FETCH b.parkingFacility
+        LEFT JOIN FETCH b.parkingFloor
+        LEFT JOIN FETCH b.vehicleType
+        LEFT JOIN FETCH b.parkingZone
+        LEFT JOIN FETCH b.acceptedBy
+        WHERE b.user.id = :userId
+        ORDER BY b.createdAt DESC
+        """)
+    List<Booking> findUserBookingsWithDetails(@Param("userId") Long userId);
+
+    @Query("""
+        SELECT b
+        FROM Booking b
+        LEFT JOIN FETCH b.user
+        LEFT JOIN FETCH b.card
+        LEFT JOIN FETCH b.parkingSlot
+        LEFT JOIN FETCH b.parkingFacility
+        LEFT JOIN FETCH b.parkingFloor
+        LEFT JOIN FETCH b.vehicleType
+        LEFT JOIN FETCH b.parkingZone
+        LEFT JOIN FETCH b.acceptedBy
+        WHERE b.id = :bookingId
+        """)
+    java.util.Optional<Booking> findByIdWithDetails(@Param("bookingId") Long bookingId);
 }

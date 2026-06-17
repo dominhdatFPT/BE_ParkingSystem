@@ -1,6 +1,7 @@
 package com.swp.parking.controller;
 
 import com.swp.parking.dto.response.ParkingAreaSummaryResponse;
+import com.swp.parking.dto.response.ParkingAreaOptionsResponse;
 import com.swp.parking.service.ParkingAreaSummaryService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -17,6 +18,11 @@ import java.util.List;
 public class ParkingAreaSummaryController {
 
     private final ParkingAreaSummaryService parkingAreaSummaryService;
+
+    @GetMapping("/options")
+    public ResponseEntity<ParkingAreaOptionsResponse> getOptions() {
+        return ResponseEntity.ok(parkingAreaSummaryService.getOptions());
+    }
 
     @GetMapping
     public ResponseEntity<List<ParkingAreaSummaryResponse>> getAreas(
