@@ -43,6 +43,45 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(ex.getStatus()).body(body);
     }
 
+    @ExceptionHandler(VehicleAlreadyHasActiveSubscriptionException.class)
+    public ResponseEntity<Map<String, Object>> handleVehicleAlreadyHasActiveSubscription(VehicleAlreadyHasActiveSubscriptionException ex) {
+        log.warn("VehicleAlreadyHasActiveSubscriptionException: {}", ex.getMessage());
+        Map<String, Object> body = new HashMap<>();
+        body.put("status", ex.getStatus().value());
+        body.put("message", ex.getMessage());
+        body.put("currentSubscriptionEndDate", ex.getCurrentSubscriptionEndDate());
+        body.put("timestamp", LocalDateTime.now());
+        return ResponseEntity.status(ex.getStatus()).body(body);
+    }
+
+    @ExceptionHandler(VehicleNotOwnedByUserException.class)
+    public ResponseEntity<Map<String, Object>> handleVehicleNotOwnedByUser(VehicleNotOwnedByUserException ex) {
+        log.warn("VehicleNotOwnedByUserException: {}", ex.getMessage());
+        Map<String, Object> body = new HashMap<>();
+        body.put("status", ex.getStatus().value());
+        body.put("message", ex.getMessage());
+        body.put("timestamp", LocalDateTime.now());
+        return ResponseEntity.status(ex.getStatus()).body(body);
+    }
+
+    @ExceptionHandler(FeePackageNotFoundException.class)
+    public ResponseEntity<Map<String, Object>> handleFeePackageNotFound(FeePackageNotFoundException ex) {
+        log.warn("FeePackageNotFoundException: {}", ex.getMessage());
+        return handleAppException(ex);
+    }
+
+    @ExceptionHandler(SubscriptionNotFoundException.class)
+    public ResponseEntity<Map<String, Object>> handleSubscriptionNotFound(SubscriptionNotFoundException ex) {
+        log.warn("SubscriptionNotFoundException: {}", ex.getMessage());
+        return handleAppException(ex);
+    }
+
+    @ExceptionHandler(InvalidSubscriptionStatusException.class)
+    public ResponseEntity<Map<String, Object>> handleInvalidSubscriptionStatus(InvalidSubscriptionStatusException ex) {
+        log.warn("InvalidSubscriptionStatusException: {}", ex.getMessage());
+        return handleAppException(ex);
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<Map<String, Object>> handleGeneralException(Exception ex) {
         log.error("Unhandled exception: {}", ex.getMessage(), ex);
