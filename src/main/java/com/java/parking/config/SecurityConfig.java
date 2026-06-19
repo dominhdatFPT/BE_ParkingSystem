@@ -43,6 +43,7 @@ public class SecurityConfig {
                         .requestMatchers("/api/v1/auth/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/parking-area-summary/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/fee-packages/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/v1/notifications", "/api/v1/notifications/**").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/v1/vehicle-registrations").hasRole("USER")
                         .requestMatchers(HttpMethod.GET, "/api/v1/vehicle-registrations/my").hasRole("USER")
                         .requestMatchers(HttpMethod.GET, "/api/v1/vehicle-registrations").hasAnyRole("ADMIN", "STAFF")
