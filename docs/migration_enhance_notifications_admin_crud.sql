@@ -11,6 +11,10 @@ ALTER TABLE notifications
     ADD COLUMN IF NOT EXISTS status            VARCHAR(20)  NOT NULL DEFAULT 'DRAFT',
     ADD COLUMN IF NOT EXISTS scheduled_at      TIMESTAMP    NULL;
 
+-- published_at must be nullable so drafts can exist without a publish time.
+ALTER TABLE notifications
+    ALTER COLUMN published_at DROP NOT NULL;
+
 -- =========================================================================
 -- 2) Update enum/category values to match the frontend labels
 --    Existing data is migrated from old enum values to the new ones.
