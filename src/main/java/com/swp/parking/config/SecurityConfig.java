@@ -50,6 +50,8 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/v1/vehicle-registrations/pending").hasAnyRole("ADMIN", "STAFF")
                         .requestMatchers(HttpMethod.GET, "/api/v1/vehicle-registrations/**").authenticated()
                         .requestMatchers(HttpMethod.PUT, "/api/v1/vehicle-registrations/**").hasAnyRole("ADMIN", "STAFF")
+                        .requestMatchers("/api/v1/admin/notifications").hasAnyRole("ADMIN", "STAFF")
+                        .requestMatchers("/api/v1/admin/notifications/**").hasAnyRole("ADMIN", "STAFF")
                         .anyRequest().authenticated()
                 )
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);

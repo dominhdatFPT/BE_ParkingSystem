@@ -1,6 +1,9 @@
 package com.swp.parking.model;
 
 import com.swp.parking.model.enums.NotificationCategory;
+import com.swp.parking.model.enums.NotificationPriority;
+import com.swp.parking.model.enums.NotificationRecipientTarget;
+import com.swp.parking.model.enums.NotificationStatus;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -47,7 +50,25 @@ public class Notification {
     @Builder.Default
     private Boolean isActive = Boolean.TRUE;
 
-    @Column(name = "published_at", nullable = false)
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    @Builder.Default
+    private NotificationPriority priority = NotificationPriority.NORMAL;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "recipient_target", nullable = false, length = 50)
+    @Builder.Default
+    private NotificationRecipientTarget recipientTarget = NotificationRecipientTarget.ALL_USERS;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    @Builder.Default
+    private NotificationStatus status = NotificationStatus.DRAFT;
+
+    @Column(name = "scheduled_at")
+    private LocalDateTime scheduledAt;
+
+    @Column(name = "published_at")
     private LocalDateTime publishedAt;
 
     @Column(name = "created_by")
