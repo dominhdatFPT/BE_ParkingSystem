@@ -8,6 +8,7 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -77,6 +78,7 @@ public class JwtConfig {
 
 @Component
 @RequiredArgsConstructor
+@Slf4j
 class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private final JwtConfig jwtConfig;
@@ -91,6 +93,9 @@ class JwtAuthenticationFilter extends OncePerRequestFilter {
             Long userId = jwtConfig.getUserIdFromToken(token);
             String role = jwtConfig.getRoleFromToken(token);
             String normalizedRole = role == null ? "USER" : role.toUpperCase();
+
+            log.info("JWT authenticated - userId: {}, role from token: {}, normalized: {}, path: {}",
+                    userId, role, normalizedRole, request.getRequestURI());
 
             UsernamePasswordAuthenticationToken authentication =
                     new UsernamePasswordAuthenticationToken(

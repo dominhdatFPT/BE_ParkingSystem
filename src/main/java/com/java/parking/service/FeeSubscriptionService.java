@@ -17,6 +17,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -115,6 +117,41 @@ public class FeeSubscriptionService {
 
         subscription.setStatus(SubscriptionStatus.CANCELLED);
         feeSubscriptionRepository.save(subscription);
+    }
+
+    @Transactional(readOnly = true)
+    public List<Map<String, Object>> getMySubscriptions(Long userId) {
+        return feeSubscriptionRepository.findByUserId(userId).stream().map(subscription -> {
+            Map<String, Object> item = new LinkedHashMap<>();
+            item.put("id", subscription.getId());
+            item.put("vehicleLicensePlate", subscription.getVehicle().getLicensePlate());
+            item.put("feePackageName", subscription.getFeePackage().getName());
+            item.put("amountToPay", subscription.getAmountToPay());
+            item.put("status", subscription.getStatus().name());
+            item.put("startDate", subscription.getStartDate());
+            item.put("endDate", subscription.getEndDate());
+            item.put("createdAt", subscription.getCreatedAt());
+            return item;
+        }).toList();
+    }
+
+    public Map<String, Object> paySubscription(Long userId, Long subscriptionId) {
+        FeeSubscription subscription = feeSubscriptionRepository.findById(subscriptionId)
+                .orElseThrow(() -> new SubscriptionNotFoundException(subscriptionId));
+        if (!subscription.getVehicle().getCustomer().getUser().getId().equals(userId)) {
+            throw new VehicleNotOwnedByUserException();
+        }
+        if (subscription.getStatus() != SubscriptionStatus.PENDING_PAYMENT) {
+            throw new InvalidSubscriptionStatusException("Gói không ở trạng thái chờ thanh toán");
+        }
+        LocalDateTime start = LocalDateTime.now();
+        subscription.setStatus(SubscriptionStatus.ACTIVE);
+        subscription.setStartDate(start);
+        subscription.setEndDate(start.plusMonths(subscription.getFeePackage().getDurationMonths()));
+        feeSubscriptionRepository.save(subscription);
+        return getMySubscriptions(userId).stream()
+                .filter(item -> subscriptionId.equals(item.get("id")))
+                .findFirst().orElseThrow();
     }
 
     public void confirmPaymentSuccess(Long subscriptionId) {

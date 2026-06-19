@@ -1,0 +1,15 @@
+{
+  "sqltools.connections": [
+    {
+      "name": "Supabase Smart Parking",
+      "driver": "PostgreSQL",
+      "previewLimit": 50,
+      "server": "aws-1-ap-southeast-2.pooler.supabase.com",
+      "port": 6543,
+      "database": "postgres",
+      "username": "postgres.qbwkzamzeyouunzopeip",
+      "askForPassword": true,
+      "ssl": true
+    }
+  ]
+}

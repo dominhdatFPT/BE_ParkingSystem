@@ -31,7 +31,13 @@ public class OperationsDashboardResponse {
         private long availableSlots;
         private long pendingBookings;
         private long vehiclesInToday;
+        private long vehiclesInTodayCars;
+        private long vehiclesInTodayMotorbikes;
         private long vehiclesOutToday;
+        private long vehiclesOutTodayCars;
+        private long vehiclesOutTodayMotorbikes;
+        private long activeCars;
+        private long activeMotorbikes;
         private long openIncidents;
         private BigDecimal revenueToday;
         private long totalSlots;
@@ -106,6 +112,9 @@ public class OperationsDashboardResponse {
         private String licensePlate;
         private String parkingName;
         private String floorName;
+        private String vehicleType;
+        private String customerType;
+        private String visitorCardCode;
         private String status;
         private LocalDateTime entryTime;
         private LocalDateTime exitTime;

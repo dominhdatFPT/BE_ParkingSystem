@@ -13,6 +13,7 @@ import java.math.BigDecimal;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -40,10 +41,15 @@ public class OperationsDashboardService {
                 .build();
     }
 
-    public OperationsDashboardResponse getDashboard() {
+    public OperationsDashboardResponse getDashboard(LocalDate date) {
+        LocalDate targetDate = date != null ? date : LocalDate.now();
         List<ParkingOperationsResponse.Slot> slots = readOperationSlots();
-        long totalSlots = slots.size();
-        long availableSlots = slots.stream().filter(slot -> slot.getStatus() == ParkingSlotStatus.AVAILABLE).count();
+        long activeCars = countActiveVehiclesByType("CAR");
+        long activeMotorbikes = countActiveVehiclesByType("MOTORBIKE");
+        long totalSlots = Math.max(slots.size(), countVisitorCards());
+        long availableSlots = slots.isEmpty()
+                ? countAvailableVisitorCards()
+                : slots.stream().filter(slot -> slot.getStatus() == ParkingSlotStatus.AVAILABLE).count();
         long vehiclesInParking = countActiveParkingOrders();
         if (vehiclesInParking == 0) {
             vehiclesInParking = slots.stream()
@@ -55,10 +61,16 @@ public class OperationsDashboardService {
                 .vehiclesInParking(vehiclesInParking)
                 .availableSlots(availableSlots)
                 .pendingBookings(countPendingBookings())
-                .vehiclesInToday(countVehiclesInToday())
-                .vehiclesOutToday(countVehiclesOutToday())
+                .vehiclesInToday(countVehiclesInToday(targetDate))
+                .vehiclesInTodayCars(countVehiclesInTodayByType(targetDate, "CAR"))
+                .vehiclesInTodayMotorbikes(countVehiclesInTodayByType(targetDate, "MOTORBIKE"))
+                .vehiclesOutToday(countVehiclesOutToday(targetDate))
+                .vehiclesOutTodayCars(countVehiclesOutTodayByType(targetDate, "CAR"))
+                .vehiclesOutTodayMotorbikes(countVehiclesOutTodayByType(targetDate, "MOTORBIKE"))
+                .activeCars(activeCars)
+                .activeMotorbikes(activeMotorbikes)
                 .openIncidents(countOpenIncidents())
-                .revenueToday(sumRevenueToday())
+                .revenueToday(sumRevenueToday(targetDate))
                 .totalSlots(totalSlots)
                 .occupancyRate(totalSlots > 0 ? (int) Math.round((vehiclesInParking * 100.0) / totalSlots) : 0)
                 .build();
@@ -66,11 +78,15 @@ public class OperationsDashboardService {
         return OperationsDashboardResponse.builder()
                 .metrics(metrics)
                 .areaOccupancy(buildAreaOccupancy(slots))
-                .trafficByHour(readTrafficByHour())
+                .trafficByHour(readTrafficByHour(targetDate))
                 .pendingBookings(readPendingBookings())
                 .recentIncidents(readRecentIncidents())
                 .recentVehicleActivities(readRecentVehicleActivities())
                 .build();
+    }
+
+    public List<OperationsDashboardResponse.VehicleActivity> getParkingSessions() {
+        return readVehicleActivities(null);
     }
 
     private List<ParkingOperationsResponse.Slot> readOperationSlots() {
@@ -103,9 +119,9 @@ public class OperationsDashboardService {
                     COALESCE(pf.parking_id, df.parking_id) AS parking_id,
                     COALESCE(pf.parking_name, df.parking_name) AS parking_name
                 FROM parking_slots ps
-                LEFT JOIN first_floor ff ON ps.floor_id IS NULL AND ff.floor_number = ps.floor
-                LEFT JOIN parking_floors fl ON fl.floor_id = COALESCE(ps.floor_id, ff.floor_id)
-                LEFT JOIN parking_facilities pf ON pf.parking_id = COALESCE(ps.parking_id, fl.parking_id)
+                LEFT JOIN first_floor ff ON ff.floor_number = ps.floor
+                LEFT JOIN parking_floors fl ON fl.floor_id = ff.floor_id
+                LEFT JOIN parking_facilities pf ON pf.parking_id = fl.parking_id
                 LEFT JOIN default_facility df ON true
                 ORDER BY COALESCE(pf.parking_id, df.parking_id, 0), ps.floor, ps.slot_number
                 """;
@@ -222,22 +238,65 @@ public class OperationsDashboardService {
                 """);
     }
 
-    private long countVehiclesInToday() {
+    private long countVehiclesInToday(LocalDate date) {
         return queryLong("""
                 SELECT COUNT(*)
                 FROM parking_orders
-                WHERE entry_time >= CURRENT_DATE
-                  AND entry_time < CURRENT_DATE + INTERVAL '1 day'
-                """);
+                WHERE entry_time >= ?
+                  AND entry_time < ?
+                """, date, date.plusDays(1));
     }
 
-    private long countVehiclesOutToday() {
+    private long countVehiclesInTodayByType(LocalDate date, String vehicleType) {
+        return queryLong("""
+                SELECT COUNT(*)
+                FROM parking_orders po
+                LEFT JOIN vehicles v ON v.vehicle_id = po.vehicle_id
+                LEFT JOIN vehicle_types vt ON vt.vehicle_type_id = v.vehicle_type_id
+                WHERE po.entry_time >= ?
+                  AND po.entry_time < ?
+                  AND %s = ?
+                """.formatted(vehicleTypeExpression()), date, date.plusDays(1), vehicleType);
+    }
+
+    private long countVehiclesOutToday(LocalDate date) {
         return queryLong("""
                 SELECT COUNT(*)
                 FROM parking_orders
-                WHERE exit_time >= CURRENT_DATE
-                  AND exit_time < CURRENT_DATE + INTERVAL '1 day'
-                """);
+                WHERE exit_time >= ?
+                  AND exit_time < ?
+                """, date, date.plusDays(1));
+    }
+
+    private long countVehiclesOutTodayByType(LocalDate date, String vehicleType) {
+        return queryLong("""
+                SELECT COUNT(*)
+                FROM parking_orders po
+                LEFT JOIN vehicles v ON v.vehicle_id = po.vehicle_id
+                LEFT JOIN vehicle_types vt ON vt.vehicle_type_id = v.vehicle_type_id
+                WHERE po.exit_time >= ?
+                  AND po.exit_time < ?
+                  AND %s = ?
+                """.formatted(vehicleTypeExpression()), date, date.plusDays(1), vehicleType);
+    }
+
+    private long countActiveVehiclesByType(String vehicleType) {
+        return queryLong("""
+                SELECT COUNT(*)
+                FROM parking_orders po
+                LEFT JOIN vehicles v ON v.vehicle_id = po.vehicle_id
+                LEFT JOIN vehicle_types vt ON vt.vehicle_type_id = v.vehicle_type_id
+                WHERE (po.parking_status = 'ACTIVE' OR (po.entry_time IS NOT NULL AND po.exit_time IS NULL))
+                  AND %s = ?
+                """.formatted(vehicleTypeExpression()), vehicleType);
+    }
+
+    private long countVisitorCards() {
+        return queryLong("SELECT COUNT(*) FROM visitor_cards");
+    }
+
+    private long countAvailableVisitorCards() {
+        return queryLong("SELECT COUNT(*) FROM visitor_cards WHERE status = 'AVAILABLE'");
     }
 
     private long countOpenIncidents() {
@@ -249,16 +308,16 @@ public class OperationsDashboardService {
                 """);
     }
 
-    private BigDecimal sumRevenueToday() {
+    private BigDecimal sumRevenueToday(LocalDate date) {
         String sql = """
                 SELECT COALESCE(SUM(calculated_fee), 0)
                 FROM parking_orders
                 WHERE calculated_fee IS NOT NULL
-                  AND exit_time >= CURRENT_DATE
-                  AND exit_time < CURRENT_DATE + INTERVAL '1 day'
+                  AND exit_time >= ?
+                  AND exit_time < ?
                 """;
         try {
-            BigDecimal value = jdbcTemplate.queryForObject(sql, BigDecimal.class);
+            BigDecimal value = jdbcTemplate.queryForObject(sql, BigDecimal.class, date, date.plusDays(1));
             return value != null ? value : BigDecimal.ZERO;
         } catch (DataAccessException ex) {
             log.warn("Could not calculate today revenue: {}", ex.getMessage());
@@ -266,7 +325,7 @@ public class OperationsDashboardService {
         }
     }
 
-    private List<OperationsDashboardResponse.TrafficPoint> readTrafficByHour() {
+    private List<OperationsDashboardResponse.TrafficPoint> readTrafficByHour(LocalDate date) {
         List<OperationsDashboardResponse.TrafficPoint> points = new ArrayList<>();
         for (int hour = 0; hour < 24; hour += 2) {
             points.add(OperationsDashboardResponse.TrafficPoint.builder()
@@ -279,22 +338,22 @@ public class OperationsDashboardService {
         mergeTraffic(points, "in", """
                 SELECT FLOOR(EXTRACT(HOUR FROM entry_time) / 2)::int AS bucket, COUNT(*) AS count
                 FROM parking_orders
-                WHERE entry_time >= CURRENT_DATE
-                  AND entry_time < CURRENT_DATE + INTERVAL '1 day'
+                WHERE entry_time >= ?
+                  AND entry_time < ?
                 GROUP BY bucket
-                """);
+                """, date, date.plusDays(1));
         mergeTraffic(points, "out", """
                 SELECT FLOOR(EXTRACT(HOUR FROM exit_time) / 2)::int AS bucket, COUNT(*) AS count
                 FROM parking_orders
-                WHERE exit_time >= CURRENT_DATE
-                  AND exit_time < CURRENT_DATE + INTERVAL '1 day'
+                WHERE exit_time >= ?
+                  AND exit_time < ?
                 GROUP BY bucket
-                """);
+                """, date, date.plusDays(1));
 
         return points;
     }
 
-    private void mergeTraffic(List<OperationsDashboardResponse.TrafficPoint> points, String type, String sql) {
+    private void mergeTraffic(List<OperationsDashboardResponse.TrafficPoint> points, String type, String sql, Object... args) {
         try {
             jdbcTemplate.query(sql, rs -> {
                 int bucket = rs.getInt("bucket");
@@ -307,7 +366,7 @@ public class OperationsDashboardService {
                         point.setOut(count);
                     }
                 }
-            });
+            }, args);
         } catch (DataAccessException ex) {
             log.warn("Could not read traffic {} by hour: {}", type, ex.getMessage());
         }
@@ -393,6 +452,11 @@ public class OperationsDashboardService {
     }
 
     private List<OperationsDashboardResponse.VehicleActivity> readRecentVehicleActivities() {
+        return readVehicleActivities(8);
+    }
+
+    private List<OperationsDashboardResponse.VehicleActivity> readVehicleActivities(Integer limit) {
+        String limitClause = limit == null ? "" : "LIMIT " + limit;
         String sql = """
                 SELECT
                     po.order_id,
@@ -403,14 +467,21 @@ public class OperationsDashboardService {
                     po.parking_status,
                     po.calculated_fee,
                     po.updated_at,
-                    pf.parking_name,
-                    fl.floor_name
+                    %s AS vehicle_type,
+                    CASE
+                        WHEN COALESCE(po.notes, '') LIKE 'ENTRY_TYPE=MONTHLY%%' THEN 'MONTHLY'
+                        ELSE 'VISITOR'
+                    END AS customer_type,
+                    COALESCE(vc.card_code, substring(COALESCE(po.notes, '') from 'VISITOR_CARD=([^;]+)')) AS visitor_card_code,
+                    NULL AS parking_name,
+                    NULL AS floor_name
                 FROM parking_orders po
-                LEFT JOIN parking_facilities pf ON pf.parking_id = po.parking_id
-                LEFT JOIN parking_floors fl ON fl.floor_id = po.floor_id
+                LEFT JOIN vehicles v ON v.vehicle_id = po.vehicle_id
+                LEFT JOIN vehicle_types vt ON vt.vehicle_type_id = v.vehicle_type_id
+                LEFT JOIN visitor_cards vc ON vc.current_order_id = po.order_id OR vc.visitor_card_id = po.card_id
                 ORDER BY po.updated_at DESC
-                LIMIT 8
-                """;
+                %s
+                """.formatted(vehicleTypeExpression(), limitClause);
         try {
             return jdbcTemplate.query(sql, (rs, rowNum) -> OperationsDashboardResponse.VehicleActivity.builder()
                     .id(getLong(rs, "order_id"))
@@ -418,6 +489,9 @@ public class OperationsDashboardService {
                     .licensePlate(rs.getString("license_plate"))
                     .parkingName(rs.getString("parking_name"))
                     .floorName(rs.getString("floor_name"))
+                    .vehicleType(rs.getString("vehicle_type"))
+                    .customerType(rs.getString("customer_type"))
+                    .visitorCardCode(rs.getString("visitor_card_code"))
                     .status(rs.getString("parking_status"))
                     .entryTime(getLocalDateTime(rs, "entry_time"))
                     .exitTime(getLocalDateTime(rs, "exit_time"))
@@ -438,6 +512,28 @@ public class OperationsDashboardService {
             log.warn("Could not read dashboard metric: {}", ex.getMessage());
             return 0;
         }
+    }
+
+    private long queryLong(String sql, Object... args) {
+        try {
+            Long value = jdbcTemplate.queryForObject(sql, Long.class, args);
+            return value != null ? value : 0;
+        } catch (DataAccessException ex) {
+            log.warn("Could not read dashboard metric: {}", ex.getMessage());
+            return 0;
+        }
+    }
+
+    private String vehicleTypeExpression() {
+        return """
+                CASE
+                    WHEN upper(COALESCE(vt.type_code, '')) LIKE 'MOTORBIKE%%'
+                      OR upper(COALESCE(vt.type_name, '')) LIKE '%%XE MÁY%%'
+                      OR upper(COALESCE(po.notes, '')) LIKE '%%VEHICLE_TYPE=MOTORBIKE%%'
+                    THEN 'MOTORBIKE'
+                    ELSE 'CAR'
+                END
+                """;
     }
 
     private ParkingSlotStatus parseSlotStatus(String status) {

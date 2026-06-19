@@ -15,6 +15,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequiredArgsConstructor
@@ -47,6 +48,16 @@ public class FeeSubscriptionController {
             @RequestBody CreateSubscriptionRequest request) {
         CreateSubscriptionResponse result = feeSubscriptionService.createSubscription(getCurrentUserId(), request);
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success(result));
+    }
+
+    @GetMapping("/api/v1/fee-subscriptions/my")
+    public ResponseEntity<ApiResponse<List<Map<String, Object>>>> getMySubscriptions() {
+        return ResponseEntity.ok(ApiResponse.success(feeSubscriptionService.getMySubscriptions(getCurrentUserId())));
+    }
+
+    @PostMapping("/api/v1/fee-subscriptions/{id}/payment")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> paySubscription(@PathVariable Long id) {
+        return ResponseEntity.ok(ApiResponse.success(feeSubscriptionService.paySubscription(getCurrentUserId(), id)));
     }
 
     @PatchMapping("/api/v1/fee-subscriptions/{id}/cancel")

@@ -1,6 +1,7 @@
 package com.swp.parking.service;
 
 import com.swp.parking.exception.AppException;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
@@ -12,6 +13,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 @Service
+@Slf4j
 public class SecurityRoleService {
 
     public void requireAnyRole(String... roles) {
@@ -24,11 +26,18 @@ public class SecurityRoleService {
                 .map(role -> role.startsWith("ROLE_") ? role : "ROLE_" + role)
                 .collect(Collectors.toSet());
 
-        boolean matched = authentication.getAuthorities().stream()
+        Set<String> actualAuthorities = authentication.getAuthorities().stream()
                 .map(GrantedAuthority::getAuthority)
-                .anyMatch(expectedAuthorities::contains);
+                .collect(Collectors.toSet());
+
+        log.debug("Role check - principal: {}, expected: {}, actual: {}",
+                authentication.getPrincipal(), expectedAuthorities, actualAuthorities);
+
+        boolean matched = actualAuthorities.stream().anyMatch(expectedAuthorities::contains);
 
         if (!matched) {
+            log.warn("Access denied - principal: {}, expected: {}, actual: {}",
+                    authentication.getPrincipal(), expectedAuthorities, actualAuthorities);
             throw new AppException(HttpStatus.FORBIDDEN, "You do not have permission to access this resource");
         }
     }

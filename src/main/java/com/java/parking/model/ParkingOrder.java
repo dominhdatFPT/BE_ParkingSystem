@@ -39,6 +39,20 @@ public class ParkingOrder {
     @JoinColumn(name = "vehicle_id")
     private Vehicle vehicle;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "vehicle_type_id")
+    private VehicleType vehicleType;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "subscription_id")
+    private FeeSubscription subscription;
+
+    @Column(name = "visitor_card_id")
+    private Long visitorCardId;
+
+    @Column(name = "entry_type")
+    private String entryType;
+
     @Column(name = "license_plate")
     private String licensePlate;
 
@@ -62,6 +76,24 @@ public class ParkingOrder {
 
     @Column(name = "checked_in_by")
     private Long checkedInBy;
+
+    @Column(name = "checked_out_by")
+    private Long checkedOutBy;
+
+    @Column(name = "checkout_confirmed_at")
+    private LocalDateTime checkoutConfirmedAt;
+
+    @Column(name = "payment_status")
+    private String paymentStatus;
+
+    @Column(name = "payment_method")
+    private String paymentMethod;
+
+    @Column(name = "fee_rate_id")
+    private Long feeRateId;
+
+    @Column(name = "fee_breakdown", columnDefinition = "jsonb")
+    private String feeBreakdown;
 
     private String notes;
 
