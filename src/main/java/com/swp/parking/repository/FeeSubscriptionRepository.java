@@ -17,4 +17,16 @@ public interface FeeSubscriptionRepository extends JpaRepository<FeeSubscription
     boolean existsByVehicle_IdAndStatus(Long vehicleId, SubscriptionStatus status);
 
     Optional<FeeSubscription> findByVehicle_IdAndStatus(Long vehicleId, SubscriptionStatus status);
+
+    List<FeeSubscription> findAllByVehicle_IdAndStatus(Long vehicleId, SubscriptionStatus status);
+
+    @Query("""
+            SELECT fs FROM FeeSubscription fs
+            JOIN FETCH fs.vehicle v
+            JOIN FETCH fs.feePackage
+            JOIN FETCH fs.priceHistory
+            WHERE v.customer.user.id = :userId
+            ORDER BY fs.createdAt DESC
+            """)
+    List<FeeSubscription> findAllByUserId(@Param("userId") Long userId);
 }

@@ -10,4 +10,7 @@ public interface FeePackagePriceHistoryRepository extends JpaRepository<FeePacka
 
     Optional<FeePackagePriceHistory> findFirstByFeePackage_IdAndEffectiveFromLessThanEqualOrderByEffectiveFromDesc(
             Long feePackageId, LocalDateTime dateTime);
+
+    Optional<FeePackagePriceHistory> findFirstByFeePackage_IdAndEffectiveToIsNullOrderByEffectiveFromDesc(
+            Long feePackageId);
 }

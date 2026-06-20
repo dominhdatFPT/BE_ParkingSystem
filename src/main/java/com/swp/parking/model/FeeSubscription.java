@@ -48,6 +48,13 @@ public class FeeSubscription {
 
     private LocalDateTime endDate;
 
+    @Builder.Default
+    @Column(name = "is_auto_renew", nullable = false)
+    private Boolean isAutoRenew = false;
+
+    @Column(name = "momo_partner_token", length = 1024)
+    private String momoPartnerToken;
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;

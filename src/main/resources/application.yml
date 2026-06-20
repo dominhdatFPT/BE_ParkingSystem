@@ -26,3 +26,12 @@ ekyc:
   base-url: https://api.vnpt.vn/ekyc
   token: YOUR_VNPT_TOKEN
   token-id: YOUR_VNPT_TOKEN_ID
+
+momo:
+  personal:
+    phone: ${MOMO_PERSONAL_PHONE:0982094533}
+    name: ${MOMO_PERSONAL_NAME:PHAM NGUYEN QUYEN}
+    order-expire-minutes: ${MOMO_ORDER_EXPIRE_MINUTES:10}
+
+crypto:
+  aes-secret-key: ${CRYPTO_AES_SECRET_KEY:SmartParkingAESKey2024VerySecure!}
