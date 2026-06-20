@@ -16,4 +16,8 @@ public interface VehicleRegistrationRepository extends JpaRepository<VehicleRegi
     Page<VehicleRegistration> findByStatusOrderByCreatedAtDesc(String status, Pageable pageable);
 
     boolean existsByUser_IdAndLicensePlate(Long userId, String licensePlate);
+
+    boolean existsByEkycCccdIdAndUser_IdNot(String ekycCccdId, Long userId);
+
+    boolean existsByEkycLicenseNumberAndUser_IdNot(String ekycLicenseNumber, Long userId);
 }

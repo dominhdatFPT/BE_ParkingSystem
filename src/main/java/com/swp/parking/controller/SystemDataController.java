@@ -1,6 +1,8 @@
 package com.swp.parking.controller;
 
+import com.swp.parking.dto.request.IncidentReplyRequest;
 import com.swp.parking.service.SystemDataService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -37,6 +39,12 @@ public class SystemDataController {
     @PostMapping("/incidents")
     public ResponseEntity<Map<String, Object>> createIncident(@RequestBody Map<String, Object> request) {
         return ResponseEntity.ok(service.createIncident(currentUserId(), request));
+    }
+
+    @PatchMapping("/incidents/{id}/reply")
+    public ResponseEntity<Map<String, Object>> replyIncident(@PathVariable Long id,
+            @Valid @RequestBody IncidentReplyRequest request) {
+        return ResponseEntity.ok(service.replyIncident(currentUserId(), id, request));
     }
 
     @PatchMapping("/incidents/{id}/close")

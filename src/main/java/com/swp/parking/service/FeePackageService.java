@@ -60,6 +60,7 @@ public class FeePackageService {
                 .isPopular(fp.getIsPopular())
                 .isBestValue(fp.getIsBestValue())
                 .currentPrice(currentPrice)
+                .price(currentPrice)
                 .originalPrice(originalPrice)
                 .discountPercent(discountPercent)
                 .build();

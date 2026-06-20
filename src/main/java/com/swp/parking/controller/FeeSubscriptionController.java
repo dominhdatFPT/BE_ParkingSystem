@@ -31,15 +31,19 @@ public class FeeSubscriptionController {
 
     @GetMapping("/api/v1/fee-packages")
     public ResponseEntity<ApiResponse<List<FeePackageResponse>>> getFeePackages(
-            @RequestParam(required = false) Long category) {
-        List<FeePackageResponse> result = feePackageService.getFeePackages(category);
+            @RequestParam(required = false) Long category,
+            @RequestParam(required = false) Long vehicleTypeId) {
+        Long typeId = vehicleTypeId != null ? vehicleTypeId : category;
+        List<FeePackageResponse> result = feePackageService.getFeePackages(typeId);
         return ResponseEntity.ok(ApiResponse.success(result));
     }
 
     @GetMapping("/api/v1/fee-subscriptions/my-vehicles")
     public ResponseEntity<ApiResponse<List<MyVehicleResponse>>> getMyVehicles(
-            @RequestParam(required = false) Long category) {
-        List<MyVehicleResponse> result = feeSubscriptionService.getMyVehicles(getCurrentUserId(), category);
+            @RequestParam(required = false) Long category,
+            @RequestParam(required = false) Long vehicleTypeId) {
+        Long typeId = vehicleTypeId != null ? vehicleTypeId : category;
+        List<MyVehicleResponse> result = feeSubscriptionService.getMyVehicles(getCurrentUserId(), typeId);
         return ResponseEntity.ok(ApiResponse.success(result));
     }
 

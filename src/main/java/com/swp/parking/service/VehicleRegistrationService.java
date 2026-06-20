@@ -1,5 +1,6 @@
 package com.swp.parking.service;
 
+import com.swp.parking.config.EkycProperties;
 import com.swp.parking.dto.ekyc.EkycCccdResult;
 import com.swp.parking.dto.ekyc.EkycLicenseResult;
 import com.swp.parking.dto.ekyc.EkycValidationResult;
@@ -42,6 +43,7 @@ public class VehicleRegistrationService {
     private final UserRepository userRepository;
     private final CustomerRepository customerRepository;
     private final EkycService ekycService;
+    private final EkycProperties ekycProperties;
 
     private LocalDate parseDate(String s) {
         if (s == null) return null;
@@ -59,6 +61,12 @@ public class VehicleRegistrationService {
                 .vehicleTypeId(reg.getVehicleType().getId())
                 .vehicleTypeName(reg.getVehicleType().getTypeName())
                 .licensePlate(reg.getLicensePlate())
+                .contactPhone(reg.getContactPhone())
+                .requestedFeePackageId(reg.getRequestedFeePackage() != null
+                        ? reg.getRequestedFeePackage().getId() : null)
+                .requestedFeePackageName(reg.getRequestedFeePackage() != null
+                        ? reg.getRequestedFeePackage().getName() : null)
+                .registrationSource(reg.getRegistrationSource())
                 .brand(reg.getBrand())
                 .color(reg.getColor())
                 .status(reg.getStatus())
@@ -73,6 +81,7 @@ public class VehicleRegistrationService {
                 .cccdFrontImage(reg.getCccdFrontImage())
                 .cccdBackImage(reg.getCccdBackImage())
                 .licenseImage(reg.getLicenseImage())
+                .vehicleDocumentImage(reg.getVehicleDocumentImage())
                 .plateImage(reg.getPlateImage())
                 .createdAt(reg.getCreatedAt())
                 .reviewedAt(reg.getReviewedAt())
@@ -88,32 +97,66 @@ public class VehicleRegistrationService {
         VehicleType vehicleType = vehicleTypeRepository.findById(request.getVehicleTypeId())
                 .orElseThrow(() -> new AppException(HttpStatus.NOT_FOUND, "Loại xe không tồn tại"));
 
-        if (registrationRepository.existsByUser_IdAndLicensePlate(userId, request.getLicensePlate())) {
+        String detectedPlate = ekycService.ocrLicensePlate(request.getPlateImage());
+        if (ekycProperties.isValidationEnabled()
+                && registrationRepository.existsByUser_IdAndLicensePlate(userId, detectedPlate)) {
             throw new AppException(HttpStatus.CONFLICT, "Biển số đã đăng ký");
         }
 
         EkycCccdResult cccd = ekycService.ocrCccd(request.getCccdFrontImage());
         EkycLicenseResult license = ekycService.ocrLicense(request.getLicenseImage());
-        EkycValidationResult validation = ekycService.validateDocument(request.getCccdFrontImage());
+        String vehicleDocumentText = ekycService.ocrVehicleDocument(request.getVehicleDocumentImage());
+        EkycValidationResult validation = null;
+        Double confidenceScore = null;
+        if (ekycProperties.isValidationEnabled()) {
+            validation = requireValidDocument("CCCD mặt trước", request.getCccdFrontImage());
+            requireValidDocument("CCCD mặt sau", request.getCccdBackImage());
+            requireValidDocument("bằng lái xe", request.getLicenseImage());
+            requireValidDocument("giấy đăng ký xe", request.getVehicleDocumentImage());
+            confidenceScore = validation != null ? validation.getConfidenceScore() : null;
 
-        if (validation != null && Boolean.TRUE.equals(validation.getIsFake())) {
-            throw new AppException(HttpStatus.UNPROCESSABLE_ENTITY, "Tài liệu giả mạo");
+            if (cccd == null || cccd.getFullName() == null || cccd.getFullName().isBlank()) {
+                throw new AppException(HttpStatus.UNPROCESSABLE_ENTITY, "Không đọc được họ tên trên CCCD");
+            }
+            if (license == null || license.getFullName() == null || license.getFullName().isBlank()) {
+                throw new AppException(HttpStatus.UNPROCESSABLE_ENTITY, "Không đọc được họ tên trên bằng lái xe");
+            }
+            if (!samePersonName(cccd.getFullName(), license.getFullName())) {
+                throw new AppException(HttpStatus.UNPROCESSABLE_ENTITY,
+                        "Họ tên trên CCCD và bằng lái xe không khớp");
+            }
+            if (!containsPlate(vehicleDocumentText, detectedPlate)) {
+                throw new AppException(HttpStatus.UNPROCESSABLE_ENTITY,
+                        "Biển số trên giấy đăng ký xe không khớp với ảnh biển số");
+            }
+        } else {
+            log.warn("eKYC validation đang TẮT (ekyc.validation-enabled=false) - bỏ qua đối chiếu "
+                    + "họ tên/biển số/chất lượng ảnh và kiểm tra trùng thông tin. "
+                    + "CHỈ dùng để test, nhớ bật lại trước khi demo/nghiệm thu.");
         }
-
-        Double confidenceScore = validation != null ? validation.getConfidenceScore() : null;
-        if (confidenceScore == null || confidenceScore < 70) {
-            throw new AppException(HttpStatus.UNPROCESSABLE_ENTITY, "Ảnh không đủ chất lượng");
+        if (ekycProperties.isValidationEnabled()
+                && cccd != null && cccd.getId() != null
+                && registrationRepository.existsByEkycCccdIdAndUser_IdNot(cccd.getId(), userId)) {
+            throw new AppException(HttpStatus.CONFLICT,
+                    "CCCD này đã được sử dụng cho một tài khoản khác");
+        }
+        if (ekycProperties.isValidationEnabled()
+                && license != null && license.getLicenseNumber() != null
+                && registrationRepository.existsByEkycLicenseNumberAndUser_IdNot(license.getLicenseNumber(), userId)) {
+            throw new AppException(HttpStatus.CONFLICT,
+                    "Bằng lái này đã được sử dụng cho một tài khoản khác");
         }
 
         VehicleRegistration registration = VehicleRegistration.builder()
                 .user(user)
                 .vehicleType(vehicleType)
-                .licensePlate(request.getLicensePlate())
+                .licensePlate(detectedPlate)
                 .brand(request.getBrand())
                 .color(request.getColor())
                 .cccdFrontImage(request.getCccdFrontImage())
                 .cccdBackImage(request.getCccdBackImage())
                 .licenseImage(request.getLicenseImage())
+                .vehicleDocumentImage(request.getVehicleDocumentImage())
                 .plateImage(request.getPlateImage())
                 .ekycCccdId(cccd != null ? cccd.getId() : null)
                 .ekycFullName(cccd != null ? cccd.getFullName() : null)
@@ -133,10 +176,55 @@ public class VehicleRegistrationService {
                 .ekycIsFake(validation != null ? validation.getIsFake() : null)
                 .ekycConfidenceScore(confidenceScore)
                 .ekycDocumentType(validation != null ? validation.getDocumentType() : null)
+                .registrationSource("VERIFIED_DOCUMENTS")
                 .status("PENDING")
                 .build();
 
         return toResponse(registrationRepository.save(registration));
+    }
+
+    private EkycValidationResult requireValidDocument(String label, String image) {
+        EkycValidationResult result = ekycService.validateDocument(image);
+        if (result == null || Boolean.TRUE.equals(result.getIsFake())) {
+            throw new AppException(HttpStatus.UNPROCESSABLE_ENTITY, label + " không hợp lệ hoặc có dấu hiệu giả mạo");
+        }
+        if (!Boolean.TRUE.equals(result.getIsValid())
+                || result.getConfidenceScore() == null
+                || result.getConfidenceScore() < 70) {
+            throw new AppException(HttpStatus.UNPROCESSABLE_ENTITY,
+                    label + " bị mờ, thiếu nội dung hoặc không đủ chất lượng");
+        }
+        return result;
+    }
+
+    private boolean samePersonName(String first, String second) {
+        String normalizedFirst = normalizePersonName(first);
+        String normalizedSecond = normalizePersonName(second);
+        if (normalizedFirst.equals(normalizedSecond)) {
+            return true;
+        }
+        java.util.Set<String> firstTokens = new java.util.HashSet<>(java.util.List.of(normalizedFirst.split(" ")));
+        java.util.Set<String> secondTokens = new java.util.HashSet<>(java.util.List.of(normalizedSecond.split(" ")));
+        return firstTokens.equals(secondTokens);
+    }
+
+    private boolean containsPlate(String documentText, String plate) {
+        String normalizedDocument = documentText == null
+                ? ""
+                : documentText.toUpperCase().replaceAll("[^A-Z0-9]", "");
+        String normalizedPlate = plate == null
+                ? ""
+                : plate.toUpperCase().replaceAll("[^A-Z0-9]", "");
+        return !normalizedPlate.isBlank() && normalizedDocument.contains(normalizedPlate);
+    }
+
+    private String normalizePersonName(String value) {
+        return java.text.Normalizer.normalize(value, java.text.Normalizer.Form.NFD)
+                .replaceAll("\\p{M}", "")
+                .replaceAll("[^A-Za-z ]", " ")
+                .replaceAll("\\s+", " ")
+                .trim()
+                .toUpperCase();
     }
 
     @Transactional(readOnly = true)

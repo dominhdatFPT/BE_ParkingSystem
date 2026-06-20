@@ -41,17 +41,55 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .requestMatchers("/api/v1/auth/**").permitAll()
+
+                        // Public read endpoints
                         .requestMatchers(HttpMethod.GET, "/api/v1/parking-area-summary/**").permitAll()
-                        .requestMatchers(HttpMethod.GET, "/api/v1/fee-packages/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/v1/fee-packages", "/api/v1/fee-packages/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/notifications", "/api/v1/notifications/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/v1/vehicle-types").permitAll()
+
+                        // User-only endpoints (must be checked before generic admin/staff rules)
                         .requestMatchers(HttpMethod.POST, "/api/v1/vehicle-registrations").hasRole("USER")
                         .requestMatchers(HttpMethod.GET, "/api/v1/vehicle-registrations/my").hasRole("USER")
+                        .requestMatchers(HttpMethod.GET, "/api/v1/bookings/my-bookings").authenticated()
+                        .requestMatchers(HttpMethod.POST, "/api/v1/bookings").authenticated()
+                        // User payment endpoint is covered by .anyRequest().authenticated()
+
+                        // Admin/Staff management endpoints
+                        .requestMatchers("/api/v1/admin/**").hasAnyRole("ADMIN", "STAFF")
+                        .requestMatchers("/api/v1/staff/**").hasAnyRole("ADMIN", "STAFF")
+                        .requestMatchers("/api/v1/users").hasAnyRole("ADMIN", "STAFF")
+                        .requestMatchers(HttpMethod.GET, "/api/v1/users/me").authenticated()
+                        .requestMatchers("/api/v1/users/**").hasAnyRole("ADMIN", "STAFF")
+                        .requestMatchers("/api/v1/parking-slots", "/api/v1/parking-slots/**").hasAnyRole("ADMIN", "STAFF")
+                        .requestMatchers("/api/v1/parking-entry", "/api/v1/parking-entry/**").hasAnyRole("ADMIN", "STAFF")
+                        .requestMatchers("/api/v1/parking-exit", "/api/v1/parking-exit/**").hasAnyRole("ADMIN", "STAFF")
+                        .requestMatchers("/api/v1/incidents", "/api/v1/incidents/**").hasAnyRole("ADMIN", "STAFF")
+                        .requestMatchers(HttpMethod.GET, "/api/v1/audit-logs").hasAnyRole("ADMIN", "STAFF")
+                        .requestMatchers("/api/v1/system-configuration").hasAnyRole("ADMIN", "STAFF")
+
+                        // Fee package management
+                        .requestMatchers(HttpMethod.POST, "/api/v1/fee-packages").hasAnyRole("ADMIN", "STAFF")
+                        .requestMatchers(HttpMethod.PUT, "/api/v1/fee-packages/**").hasAnyRole("ADMIN", "STAFF")
+                        .requestMatchers(HttpMethod.DELETE, "/api/v1/fee-packages/**").hasAnyRole("ADMIN", "STAFF")
+
+                        // Bookings management
+                        .requestMatchers(HttpMethod.GET, "/api/v1/bookings").hasAnyRole("ADMIN", "STAFF")
+                        .requestMatchers(HttpMethod.GET, "/api/v1/bookings/**").hasAnyRole("ADMIN", "STAFF")
+                        .requestMatchers(HttpMethod.POST, "/api/v1/bookings/admin-create").hasAnyRole("ADMIN", "STAFF")
+                        .requestMatchers(HttpMethod.PUT, "/api/v1/bookings/**").hasAnyRole("ADMIN", "STAFF")
+                        .requestMatchers(HttpMethod.DELETE, "/api/v1/bookings/**").hasAnyRole("ADMIN", "STAFF")
+
+                        // Vehicle registrations management
                         .requestMatchers(HttpMethod.GET, "/api/v1/vehicle-registrations").hasAnyRole("ADMIN", "STAFF")
                         .requestMatchers(HttpMethod.GET, "/api/v1/vehicle-registrations/pending").hasAnyRole("ADMIN", "STAFF")
-                        .requestMatchers(HttpMethod.GET, "/api/v1/vehicle-registrations/**").authenticated()
                         .requestMatchers(HttpMethod.PUT, "/api/v1/vehicle-registrations/**").hasAnyRole("ADMIN", "STAFF")
-                        .requestMatchers("/api/v1/admin/notifications").hasAnyRole("ADMIN", "STAFF")
-                        .requestMatchers("/api/v1/admin/notifications/**").hasAnyRole("ADMIN", "STAFF")
+                        .requestMatchers(HttpMethod.GET, "/api/v1/vehicle-registrations/**").authenticated()
+
+                        // Customer endpoints
+                        .requestMatchers("/api/customer/support/**").hasRole("USER")
+                        .requestMatchers("/api/customer/**").authenticated()
+
                         .anyRequest().authenticated()
                 )
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);

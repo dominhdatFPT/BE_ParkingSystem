@@ -23,6 +23,14 @@ public class VehicleRegistrationResponse {
 
     private String licensePlate;
 
+    private String contactPhone;
+
+    private Long requestedFeePackageId;
+
+    private String requestedFeePackageName;
+
+    private String registrationSource;
+
     private String brand;
 
     private String color;
@@ -50,6 +58,8 @@ public class VehicleRegistrationResponse {
     private String cccdBackImage;
 
     private String licenseImage;
+
+    private String vehicleDocumentImage;
 
     private String plateImage;
 
