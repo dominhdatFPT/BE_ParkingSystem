@@ -56,6 +56,9 @@ public class VehicleRegistration {
     @Column(name = "license_image")
     private String licenseImage;
 
+    @Column(name = "vehicle_document_image")
+    private String vehicleDocumentImage;
+
     @Column(name = "plate_image")
     private String plateImage;
 
@@ -64,6 +67,17 @@ public class VehicleRegistration {
 
     @Column(name = "ekyc_full_name")
     private String ekycFullName;
+
+    @Column(name = "contact_phone")
+    private String contactPhone;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "requested_fee_package_id")
+    private FeePackage requestedFeePackage;
+
+    @Builder.Default
+    @Column(name = "registration_source", nullable = false)
+    private String registrationSource = "FORM";
 
     @Column(name = "ekyc_date_of_birth")
     private LocalDate ekycDateOfBirth;

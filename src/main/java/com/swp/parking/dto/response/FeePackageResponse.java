@@ -22,6 +22,7 @@ public class FeePackageResponse {
     private Boolean isPopular;
     private Boolean isBestValue;
     private BigDecimal currentPrice;
+    private BigDecimal price;
     private BigDecimal originalPrice;
     private Integer discountPercent;
 }

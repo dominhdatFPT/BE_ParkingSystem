@@ -18,6 +18,7 @@ import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
@@ -39,7 +40,7 @@ public class EkycService {
     public EkycCccdResult ocrCccd(String base64Image) {
         if (isMockProvider()) {
             return new EkycCccdResult(
-                    "012345678901",
+                    mockNationalId(),
                     "NGUYEN VAN A",
                     "2000-01-01",
                     "Nam",
@@ -81,7 +82,7 @@ public class EkycService {
     public EkycLicenseResult ocrLicense(String base64Image) {
         if (isMockProvider()) {
             return new EkycLicenseResult(
-                    "790123456789",
+                    mockLicenseNumber(),
                     "NGUYEN VAN A",
                     "2000-01-01",
                     "B2",
@@ -112,6 +113,32 @@ public class EkycService {
             log.error("eKYC driving license OCR request failed: {}", ex.getMessage(), ex);
             throw new AppException(HttpStatus.BAD_GATEWAY, "eKYC service unavailable: driving license OCR");
         }
+    }
+
+    public String ocrLicensePlate(String base64Image) {
+        if (isMockProvider()) {
+            return "51F-12345";
+        }
+
+        String text = detectText(base64Image, "license plate OCR")
+                .toUpperCase()
+                .replaceAll("[^A-Z0-9]", "");
+        Matcher matcher = Pattern.compile("\\d{2}[A-Z]{1,2}\\d{4,5}").matcher(text);
+        if (!matcher.find()) {
+            throw new AppException(HttpStatus.UNPROCESSABLE_ENTITY,
+                    "Không đọc được biển số từ ảnh. Vui lòng chụp chính diện và đủ sáng");
+        }
+
+        String compact = matcher.group();
+        int prefixLength = compact.length() - 5;
+        return compact.substring(0, prefixLength) + "-" + compact.substring(prefixLength);
+    }
+
+    public String ocrVehicleDocument(String base64Image) {
+        if (isMockProvider()) {
+            return "GIAY CHUNG NHAN DANG KY XE 51F-12345 NGUYEN VAN A";
+        }
+        return detectText(base64Image, "vehicle registration OCR");
     }
 
     public EkycValidationResult validateDocument(String base64Image) {
@@ -151,6 +178,32 @@ public class EkycService {
 
     private boolean isMockProvider() {
         return "mock".equalsIgnoreCase(ekycProperties.getProvider());
+    }
+
+    private Long currentMockUserId() {
+        try {
+            return (Long) SecurityContextHolder.getContext()
+                    .getAuthentication().getPrincipal();
+        } catch (Exception ex) {
+            return null;
+        }
+    }
+
+    private String mockNumericId(String prefix, int totalLength) {
+        Long userId = currentMockUserId();
+        String value = prefix + (userId != null ? userId : 0L);
+        if (value.length() > totalLength) {
+            return value.substring(0, totalLength);
+        }
+        return value + "0".repeat(totalLength - value.length());
+    }
+
+    private String mockNationalId() {
+        return mockNumericId("099", 12);
+    }
+
+    private String mockLicenseNumber() {
+        return mockNumericId("079", 12);
     }
 
     private String detectText(String base64Image, String action) {

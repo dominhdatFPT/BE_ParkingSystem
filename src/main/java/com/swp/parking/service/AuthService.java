@@ -132,14 +132,11 @@ public class AuthService {
         return userRepository.findActiveEmployeeRoleByUserId(userId)
                 .map(String::toUpperCase)
                 .map(role -> {
-                    if ("SECURITY".equals(role) || "CASHIER".equals(role)) {
-                        return UserRole.STAFF;
+                    if ("ADMIN".equals(role)) {
+                        return UserRole.ADMIN;
                     }
-                    try {
-                        return UserRole.valueOf(role);
-                    } catch (IllegalArgumentException ex) {
-                        return UserRole.USER;
-                    }
+                    // Mọi role nhân viên còn lại (SECURITY, CASHIER, MANAGER, ...) đều gộp thành STAFF
+                    return UserRole.STAFF;
                 })
                 .orElse(UserRole.USER);
     }

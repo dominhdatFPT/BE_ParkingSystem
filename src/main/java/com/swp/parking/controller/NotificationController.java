@@ -45,4 +45,5 @@ public class NotificationController {
         notificationService.registerDeviceToken(userId, request);
         return ResponseEntity.noContent().build();
     }
+
 }

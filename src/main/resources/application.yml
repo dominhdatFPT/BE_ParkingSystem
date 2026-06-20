@@ -2,6 +2,8 @@ spring:
 
   application:
     name: smart-parking
+  config:
+    import: optional:file:.env[.properties],optional:file:../.env[.properties]
   datasource:
     url: jdbc:postgresql://aws-1-ap-southeast-2.pooler.supabase.com:6543/postgres?sslmode=require&prepareThreshold=0
     username: postgres.qbwkzamzeyouunzopeip
@@ -26,6 +28,8 @@ ekyc:
   base-url: https://api.vnpt.vn/ekyc
   token: YOUR_VNPT_TOKEN
   token-id: YOUR_VNPT_TOKEN_ID
+  # TODO: tạm tắt để test luồng đăng ký nhanh, nhớ đổi lại "true" trước khi demo/nghiệm thu
+  validation-enabled: false
 
 momo:
   personal:
@@ -35,3 +39,7 @@ momo:
 
 crypto:
   aes-secret-key: ${CRYPTO_AES_SECRET_KEY:SmartParkingAESKey2024VerySecure!}
+
+gemini:
+  api-key: ${GEMINI_API_KEY:}
+  model: ${GEMINI_MODEL:gemini-2.5-flash}

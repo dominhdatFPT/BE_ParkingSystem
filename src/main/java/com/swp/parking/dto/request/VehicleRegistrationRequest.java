@@ -16,7 +16,6 @@ public class VehicleRegistrationRequest {
     @NotNull
     private Long vehicleTypeId;
 
-    @NotBlank
     private String licensePlate;
 
     private String brand;
@@ -31,6 +30,9 @@ public class VehicleRegistrationRequest {
 
     @NotBlank
     private String licenseImage;
+
+    @NotBlank
+    private String vehicleDocumentImage;
 
     @NotBlank
     private String plateImage;
