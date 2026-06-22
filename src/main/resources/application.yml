@@ -24,7 +24,7 @@ app:
     expiration: 86400000
 
 ekyc:
-  provider: mock
+  provider: google-vision
   base-url: https://api.vnpt.vn/ekyc
   token: YOUR_VNPT_TOKEN
   token-id: YOUR_VNPT_TOKEN_ID

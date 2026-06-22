@@ -53,6 +53,8 @@ public class FeeSubscriptionService {
                         .color(v.getColor())
                         .vehicleTypeId(v.getVehicleType().getId())
                         .vehicleTypeName(v.getVehicleType().getTypeName())
+                        .vehicleTypeCode(v.getVehicleType().getTypeCode())
+                        .createdAt(v.getCreatedAt())
                         .build())
                 .collect(Collectors.toList());
     }
