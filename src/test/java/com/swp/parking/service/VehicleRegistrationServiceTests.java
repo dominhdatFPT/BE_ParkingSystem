@@ -49,10 +49,11 @@ class VehicleRegistrationServiceTests {
         ReviewFixture fixture = fixture(10L);
         stubReview(fixture);
 
-        service.adminReview(15L, 20L, new AdminReviewRequest("APPROVED", null));
+        var response = service.adminReview(15L, 20L, new AdminReviewRequest("APPROVED", null));
 
         assertSame(fixture.vehicle, fixture.registration.getVehicle());
         assertEquals("APPROVED", fixture.registration.getStatus());
+        assertEquals("Trần Minh Đạt", response.getUserFullName());
         verify(vehicleRepository, never()).save(any(Vehicle.class));
     }
 
@@ -78,7 +79,7 @@ class VehicleRegistrationServiceTests {
     }
 
     private ReviewFixture fixture(Long existingVehicleOwnerId) {
-        User applicant = User.builder().id(10L).build();
+        User applicant = User.builder().id(10L).fullName("Trần Minh Đạt").build();
         User admin = User.builder().id(20L).build();
         Customer applicantCustomer = Customer.builder().id(30L).user(applicant).build();
         Customer vehicleCustomer = Customer.builder().id(31L)

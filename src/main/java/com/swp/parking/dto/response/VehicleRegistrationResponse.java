@@ -17,6 +17,8 @@ public class VehicleRegistrationResponse {
 
     private Long userId;
 
+    private String userFullName;
+
     private Long vehicleTypeId;
 
     private String vehicleTypeName;

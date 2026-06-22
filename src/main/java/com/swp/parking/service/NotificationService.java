@@ -36,7 +36,7 @@ public class NotificationService {
     @Transactional(readOnly = true)
     public Page<NotificationListItemResponse> getActiveNotifications(Pageable pageable) {
         return notificationRepository
-                .findByIsActiveTrueOrderByPublishedAtDesc(pageable)
+                .findPublicNotifications(NotificationStatus.SENT, pageable)
                 .map(this::toListItem);
     }
 
@@ -73,7 +73,10 @@ public class NotificationService {
         Notification notification = notificationRepository.findById(id)
                 .orElseThrow(() -> new AppException(HttpStatus.NOT_FOUND, "Notification not found"));
 
-        if (Boolean.FALSE.equals(notification.getIsActive())) {
+        if (Boolean.FALSE.equals(notification.getIsActive())
+                || notification.getStatus() != NotificationStatus.SENT
+                || notification.getRecipientUserId() != null
+                || notification.getRecipientTarget() == NotificationRecipientTarget.SPECIFIC_USER) {
             throw new AppException(HttpStatus.NOT_FOUND, "Notification not found");
         }
 
