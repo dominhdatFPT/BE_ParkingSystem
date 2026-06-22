@@ -17,6 +17,8 @@ public interface VehicleRegistrationRepository extends JpaRepository<VehicleRegi
 
     boolean existsByUser_IdAndLicensePlate(Long userId, String licensePlate);
 
+    boolean existsByUser_IdAndLicensePlateAndStatusIn(Long userId, String licensePlate, List<String> statuses);
+
     boolean existsByEkycCccdIdAndUser_IdNot(String ekycCccdId, Long userId);
 
     boolean existsByEkycLicenseNumberAndUser_IdNot(String ekycLicenseNumber, Long userId);

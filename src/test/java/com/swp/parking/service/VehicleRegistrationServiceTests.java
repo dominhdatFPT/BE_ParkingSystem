@@ -2,6 +2,7 @@ package com.swp.parking.service;
 
 import com.swp.parking.config.EkycProperties;
 import com.swp.parking.dto.request.AdminReviewRequest;
+import com.swp.parking.dto.request.VehicleRegistrationRequest;
 import com.swp.parking.exception.AppException;
 import com.swp.parking.model.Customer;
 import com.swp.parking.model.User;
@@ -43,6 +44,38 @@ class VehicleRegistrationServiceTests {
     @Mock EkycProperties ekycProperties;
 
     @InjectMocks VehicleRegistrationService service;
+
+    @Test
+    void registrationUsesSubmittedPlateWhenEkycValidationIsDisabled() {
+        User user = User.builder().id(10L).fullName("Trần Minh Đạt").build();
+        VehicleType type = VehicleType.builder().id(1L).typeName("MOTORBIKE").build();
+        VehicleRegistrationRequest request = VehicleRegistrationRequest.builder()
+                .vehicleTypeId(1L)
+                .licensePlate(" 59x3-88888 ")
+                .brand("Honda")
+                .color("Đen")
+                .cccdFrontImage("cccd-front")
+                .cccdBackImage("cccd-back")
+                .licenseImage("license")
+                .vehicleDocumentImage("vehicle-document")
+                .plateImage("plate")
+                .build();
+
+        when(userRepository.findById(10L)).thenReturn(Optional.of(user));
+        when(vehicleTypeRepository.findById(1L)).thenReturn(Optional.of(type));
+        when(ekycService.ocrLicensePlate("plate")).thenReturn("51F-12345");
+        when(registrationRepository.save(any(VehicleRegistration.class))).thenAnswer(invocation -> {
+            VehicleRegistration registration = invocation.getArgument(0);
+            registration.setId(99L);
+            return registration;
+        });
+
+        var response = service.createRegistration(10L, request);
+
+        assertEquals("59X3-88888", response.getLicensePlate());
+        assertEquals("Honda", response.getBrand());
+        assertEquals("Đen", response.getColor());
+    }
 
     @Test
     void approveReusesVehicleWhenPlateAlreadyBelongsToUser() {
