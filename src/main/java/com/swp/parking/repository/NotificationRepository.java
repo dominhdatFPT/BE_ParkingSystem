@@ -14,7 +14,16 @@ import java.util.List;
 @Repository
 public interface NotificationRepository extends JpaRepository<Notification, Long> {
 
-    Page<Notification> findByIsActiveTrueOrderByPublishedAtDesc(Pageable pageable);
+    @Query("""
+            SELECT n FROM Notification n
+            WHERE n.isActive = true
+              AND n.status = :status
+              AND n.recipientUserId IS NULL
+              AND n.recipientTarget <> com.swp.parking.model.enums.NotificationRecipientTarget.SPECIFIC_USER
+            ORDER BY n.publishedAt DESC
+            """)
+    Page<Notification> findPublicNotifications(@Param("status") NotificationStatus status,
+                                               Pageable pageable);
 
     List<Notification> findByIsActiveTrueAndStatusOrderByPublishedAtDesc(NotificationStatus status);
 

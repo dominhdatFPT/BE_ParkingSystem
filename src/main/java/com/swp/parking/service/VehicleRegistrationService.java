@@ -58,6 +58,7 @@ public class VehicleRegistrationService {
         return VehicleRegistrationResponse.builder()
                 .registrationId(reg.getId())
                 .userId(reg.getUser().getId())
+                .userFullName(reg.getUser().getFullName())
                 .vehicleTypeId(reg.getVehicleType().getId())
                 .vehicleTypeName(reg.getVehicleType().getTypeName())
                 .licensePlate(reg.getLicensePlate())
