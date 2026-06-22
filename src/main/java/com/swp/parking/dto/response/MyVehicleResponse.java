@@ -5,6 +5,8 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.time.LocalDateTime;
+
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
@@ -17,4 +19,6 @@ public class MyVehicleResponse {
     private String color;
     private Long vehicleTypeId;
     private String vehicleTypeName;
+    private String vehicleTypeCode;
+    private LocalDateTime createdAt;
 }

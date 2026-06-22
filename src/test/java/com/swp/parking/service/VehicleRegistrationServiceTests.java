@@ -46,14 +46,11 @@ class VehicleRegistrationServiceTests {
     @InjectMocks VehicleRegistrationService service;
 
     @Test
-    void registrationUsesSubmittedPlateWhenEkycValidationIsDisabled() {
+    void registrationUsesVehicleDetailsExtractedFromImages() {
         User user = User.builder().id(10L).fullName("Trần Minh Đạt").build();
         VehicleType type = VehicleType.builder().id(1L).typeName("MOTORBIKE").build();
         VehicleRegistrationRequest request = VehicleRegistrationRequest.builder()
                 .vehicleTypeId(1L)
-                .licensePlate(" 59x3-88888 ")
-                .brand("Honda")
-                .color("Đen")
                 .cccdFrontImage("cccd-front")
                 .cccdBackImage("cccd-back")
                 .licenseImage("license")
@@ -63,7 +60,9 @@ class VehicleRegistrationServiceTests {
 
         when(userRepository.findById(10L)).thenReturn(Optional.of(user));
         when(vehicleTypeRepository.findById(1L)).thenReturn(Optional.of(type));
-        when(ekycService.ocrLicensePlate("plate")).thenReturn("51F-12345");
+        when(ekycService.ocrLicensePlate("plate")).thenReturn("59X3-88888");
+        when(ekycService.ocrVehicleDocument("vehicle-document"))
+                .thenReturn("GIẤY ĐĂNG KÝ XE\nNHÃN HIỆU: Honda\nMÀU SƠN: Đen");
         when(registrationRepository.save(any(VehicleRegistration.class))).thenAnswer(invocation -> {
             VehicleRegistration registration = invocation.getArgument(0);
             registration.setId(99L);

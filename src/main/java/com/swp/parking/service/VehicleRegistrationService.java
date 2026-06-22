@@ -31,6 +31,8 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Locale;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 @Service
@@ -101,9 +103,11 @@ public class VehicleRegistrationService {
 
         String submittedPlate = normalizeLicensePlate(request.getLicensePlate());
         String ocrPlate = normalizeLicensePlate(ekycService.ocrLicensePlate(request.getPlateImage()));
-        String detectedPlate = ekycProperties.isValidationEnabled() ? ocrPlate : submittedPlate;
+        String detectedPlate = ocrPlate;
 
-        if (ekycProperties.isValidationEnabled() && !containsPlate(ocrPlate, submittedPlate)) {
+        if (ekycProperties.isValidationEnabled()
+                && !submittedPlate.isBlank()
+                && !containsPlate(ocrPlate, submittedPlate)) {
             throw new AppException(HttpStatus.UNPROCESSABLE_ENTITY,
                     "Biển số nhập vào không khớp với ảnh biển số");
         }
@@ -116,6 +120,14 @@ public class VehicleRegistrationService {
         EkycCccdResult cccd = ekycService.ocrCccd(request.getCccdFrontImage());
         EkycLicenseResult license = ekycService.ocrLicense(request.getLicenseImage());
         String vehicleDocumentText = ekycService.ocrVehicleDocument(request.getVehicleDocumentImage());
+        String detectedBrand = firstNonBlank(
+                extractVehicleDocumentField(vehicleDocumentText,
+                        "(?:NHÃN HIỆU|NHAN HIEU)(?:\\s*/\\s*(?:BRAND|MARK))?|BRAND|MARK"),
+                request.getBrand());
+        String detectedColor = firstNonBlank(
+                extractVehicleDocumentField(vehicleDocumentText,
+                        "(?:MÀU SƠN|MAU SON)(?:\\s*/\\s*COLOR)?|COLOR"),
+                request.getColor());
         EkycValidationResult validation = null;
         Double confidenceScore = null;
         if (ekycProperties.isValidationEnabled()) {
@@ -141,7 +153,7 @@ public class VehicleRegistrationService {
             }
         } else {
             log.warn("eKYC validation đang TẮT (ekyc.validation-enabled=false) - bỏ qua đối chiếu "
-                    + "OCR/chất lượng ảnh; biển số lấy từ thông tin người dùng nhập và vẫn kiểm tra trùng. "
+                    + "chất lượng/độ tin cậy; dữ liệu xe vẫn được OCR từ ảnh và kiểm tra trùng biển số. "
                     + "CHỈ dùng để test, nhớ bật lại trước khi demo/nghiệm thu.");
         }
         if (ekycProperties.isValidationEnabled()
@@ -161,8 +173,8 @@ public class VehicleRegistrationService {
                 .user(user)
                 .vehicleType(vehicleType)
                 .licensePlate(detectedPlate)
-                .brand(request.getBrand())
-                .color(request.getColor())
+                .brand(detectedBrand)
+                .color(detectedColor)
                 .cccdFrontImage(request.getCccdFrontImage())
                 .cccdBackImage(request.getCccdBackImage())
                 .licenseImage(request.getLicenseImage())
@@ -230,6 +242,21 @@ public class VehicleRegistrationService {
 
     private String normalizeLicensePlate(String value) {
         return value == null ? "" : value.trim().toUpperCase(Locale.ROOT).replaceAll("\\s+", "");
+    }
+
+    private String extractVehicleDocumentField(String text, String labelPattern) {
+        if (text == null || text.isBlank()) return null;
+        Matcher matcher = Pattern.compile(
+                "(?iu)(?:^|[\\r\\n])\\s*(?:" + labelPattern + ")\\s*[:\\-]?\\s*([^\\r\\n]+)")
+                .matcher(text);
+        if (!matcher.find()) return null;
+        String value = matcher.group(1).trim().replaceAll("\\s+", " ");
+        return value.isBlank() ? null : value;
+    }
+
+    private String firstNonBlank(String first, String second) {
+        if (first != null && !first.isBlank()) return first;
+        return second == null || second.isBlank() ? null : second.trim();
     }
 
     private String normalizePersonName(String value) {
