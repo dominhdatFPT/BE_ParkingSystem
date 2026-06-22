@@ -297,15 +297,24 @@ public class VehicleRegistrationService {
             Customer customer = customerRepository.findByUser_Id(reg.getUser().getId())
                     .orElseThrow(() -> new AppException(HttpStatus.NOT_FOUND, "Customer profile chưa tồn tại"));
 
-            Vehicle vehicle = Vehicle.builder()
-                    .customer(customer)
-                    .vehicleType(reg.getVehicleType())
-                    .licensePlate(reg.getLicensePlate())
-                    .brand(reg.getBrand())
-                    .color(reg.getColor())
-                    .build();
+            Vehicle vehicle = vehicleRepository.findByLicensePlate(reg.getLicensePlate())
+                    .map(existingVehicle -> {
+                        Long vehicleOwnerId = existingVehicle.getCustomer().getUser().getId();
+                        if (!vehicleOwnerId.equals(reg.getUser().getId())) {
+                            throw new AppException(HttpStatus.CONFLICT,
+                                    "Biển số đã thuộc một tài khoản khác");
+                        }
+                        return existingVehicle;
+                    })
+                    .orElseGet(() -> vehicleRepository.save(Vehicle.builder()
+                            .customer(customer)
+                            .vehicleType(reg.getVehicleType())
+                            .licensePlate(reg.getLicensePlate())
+                            .brand(reg.getBrand())
+                            .color(reg.getColor())
+                            .build()));
 
-            reg.setVehicle(vehicleRepository.save(vehicle));
+            reg.setVehicle(vehicle);
         }
 
         reg.setStatus(dto.getStatus());
