@@ -30,6 +30,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.Locale;
 import java.util.stream.Collectors;
 
 @Service
@@ -98,9 +99,17 @@ public class VehicleRegistrationService {
         VehicleType vehicleType = vehicleTypeRepository.findById(request.getVehicleTypeId())
                 .orElseThrow(() -> new AppException(HttpStatus.NOT_FOUND, "Loại xe không tồn tại"));
 
-        String detectedPlate = ekycService.ocrLicensePlate(request.getPlateImage());
-        if (ekycProperties.isValidationEnabled()
-                && registrationRepository.existsByUser_IdAndLicensePlate(userId, detectedPlate)) {
+        String submittedPlate = normalizeLicensePlate(request.getLicensePlate());
+        String ocrPlate = normalizeLicensePlate(ekycService.ocrLicensePlate(request.getPlateImage()));
+        String detectedPlate = ekycProperties.isValidationEnabled() ? ocrPlate : submittedPlate;
+
+        if (ekycProperties.isValidationEnabled() && !containsPlate(ocrPlate, submittedPlate)) {
+            throw new AppException(HttpStatus.UNPROCESSABLE_ENTITY,
+                    "Biển số nhập vào không khớp với ảnh biển số");
+        }
+
+        if (registrationRepository.existsByUser_IdAndLicensePlateAndStatusIn(
+                userId, detectedPlate, List.of("PENDING", "APPROVED"))) {
             throw new AppException(HttpStatus.CONFLICT, "Biển số đã đăng ký");
         }
 
@@ -132,7 +141,7 @@ public class VehicleRegistrationService {
             }
         } else {
             log.warn("eKYC validation đang TẮT (ekyc.validation-enabled=false) - bỏ qua đối chiếu "
-                    + "họ tên/biển số/chất lượng ảnh và kiểm tra trùng thông tin. "
+                    + "OCR/chất lượng ảnh; biển số lấy từ thông tin người dùng nhập và vẫn kiểm tra trùng. "
                     + "CHỈ dùng để test, nhớ bật lại trước khi demo/nghiệm thu.");
         }
         if (ekycProperties.isValidationEnabled()
@@ -217,6 +226,10 @@ public class VehicleRegistrationService {
                 ? ""
                 : plate.toUpperCase().replaceAll("[^A-Z0-9]", "");
         return !normalizedPlate.isBlank() && normalizedDocument.contains(normalizedPlate);
+    }
+
+    private String normalizeLicensePlate(String value) {
+        return value == null ? "" : value.trim().toUpperCase(Locale.ROOT).replaceAll("\\s+", "");
     }
 
     private String normalizePersonName(String value) {
@@ -304,6 +317,10 @@ public class VehicleRegistrationService {
                         if (!vehicleOwnerId.equals(reg.getUser().getId())) {
                             throw new AppException(HttpStatus.CONFLICT,
                                     "Biển số đã thuộc một tài khoản khác");
+                        }
+                        if (!existingVehicle.getVehicleType().getId().equals(reg.getVehicleType().getId())) {
+                            throw new AppException(HttpStatus.CONFLICT,
+                                    "Biển số đã được đăng ký với một loại xe khác");
                         }
                         return existingVehicle;
                     })
