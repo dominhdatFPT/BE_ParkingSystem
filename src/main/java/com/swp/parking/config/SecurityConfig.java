@@ -83,6 +83,7 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/v1/vehicle-registrations/pending").hasAnyRole("ADMIN", "STAFF")
                         .requestMatchers(HttpMethod.PUT, "/api/v1/vehicle-registrations/**").hasAnyRole("ADMIN", "STAFF")
                         .requestMatchers(HttpMethod.GET, "/api/v1/vehicle-registrations/**").authenticated()
+                        .requestMatchers(HttpMethod.DELETE, "/api/v1/vehicle-registrations/**").hasAnyRole("ADMIN", "STAFF")
 
                         // Customer endpoints
                         .requestMatchers("/api/customer/support/**").hasRole("USER")

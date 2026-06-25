@@ -12,6 +12,15 @@ import java.util.List;
 
 public interface VehicleRegistrationRepository extends JpaRepository<VehicleRegistration, Long> {
 
+    List<VehicleRegistration> findAllByIsDeletedFalse();
+
+    @Query("SELECT r FROM VehicleRegistration r WHERE r.id = :id AND r.isDeleted = false")
+    java.util.Optional<VehicleRegistration> findByIdAndNotDeleted(@Param("id") Long id);
+
+    boolean existsByLicensePlateAndIsDeletedFalse(String licensePlate);
+
+    List<VehicleRegistration> findAllByUserIdAndIsDeletedFalse(Long userId);
+
     List<VehicleRegistration> findByUser_IdOrderByCreatedAtDesc(Long userId);
 
     Page<VehicleRegistration> findAllByOrderByCreatedAtDesc(Pageable pageable);
@@ -79,7 +88,7 @@ public interface VehicleRegistrationRepository extends JpaRepository<VehicleRegi
               JOIN r.user u
               JOIN r.vehicleType vt
               LEFT JOIN r.requestedFeePackage fp
-             WHERE u.id = :userId
+             WHERE u.id = :userId AND r.isDeleted = false
              ORDER BY r.createdAt DESC
             """)
     List<VehicleRegistrationSummary> findSummariesByUserId(@Param("userId") Long userId);

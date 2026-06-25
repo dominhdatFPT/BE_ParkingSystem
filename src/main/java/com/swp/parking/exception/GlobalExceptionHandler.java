@@ -82,6 +82,24 @@ public class GlobalExceptionHandler {
         return handleAppException(ex);
     }
 
+    @ExceptionHandler(NotFoundException.class)
+    public ResponseEntity<Map<String, Object>> handleNotFoundException(NotFoundException ex) {
+        log.warn("NotFoundException: {}", ex.getMessage());
+        return handleAppException(ex);
+    }
+
+    @ExceptionHandler(AlreadyDeletedException.class)
+    public ResponseEntity<Map<String, Object>> handleAlreadyDeletedException(AlreadyDeletedException ex) {
+        log.warn("AlreadyDeletedException: {}", ex.getMessage());
+        return handleAppException(ex);
+    }
+
+    @ExceptionHandler(DuplicateLicensePlateException.class)
+    public ResponseEntity<Map<String, Object>> handleDuplicateLicensePlateException(DuplicateLicensePlateException ex) {
+        log.warn("DuplicateLicensePlateException: {}", ex.getMessage());
+        return handleAppException(ex);
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<Map<String, Object>> handleGeneralException(Exception ex) {
         log.error("Unhandled exception: {}", ex.getMessage(), ex);
