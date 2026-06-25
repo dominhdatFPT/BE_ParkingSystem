@@ -7,6 +7,7 @@ import com.swp.parking.dto.response.RegisterSubscriptionResponse;
 import com.swp.parking.dto.response.SubscriptionInvoiceResponse;
 import com.swp.parking.dto.response.SubscriptionResponse;
 import com.swp.parking.service.SubscriptionService;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -21,7 +22,7 @@ import java.util.List;
  *
  * <pre>
  * GET    /api/subscriptions/my-vehicles     – danh sách xe để chọn đăng ký
- * POST   /api/subscriptions/register        – đăng ký thẻ tháng → payUrl MoMo
+ * POST   /api/subscriptions/register        – đăng ký thẻ tháng → paymentUrl VNPay
  * PATCH  /api/subscriptions/{id}/cancel     – hủy thẻ tháng đang ACTIVE
  * POST   /api/subscriptions/cancel-renew    – tắt tự động gia hạn
  * GET    /api/subscriptions/my              – lịch sử thẻ tháng của user
@@ -47,14 +48,17 @@ public class SubscriptionController {
 
     /**
      * Đăng ký thẻ tháng.
-     * Flow: tạo subscription PENDING_PAYMENT → gọi MoMo → trả payUrl/deeplink/qrCodeUrl.
+     * Flow: tạo subscription PENDING_PAYMENT → gọi VNPay → trả paymentUrl để FE redirect.
      */
     @PostMapping("/register")
     public ResponseEntity<ApiResponse<RegisterSubscriptionResponse>> registerSubscription(
-            @Valid @RequestBody SubscriptionRegisterRequest request) {
-        RegisterSubscriptionResponse data = subscriptionService.registerSubscription(getCurrentUserId(), request);
+            @Valid @RequestBody SubscriptionRegisterRequest request,
+            HttpServletRequest httpRequest) {
+        String clientIp = getClientIp(httpRequest);
+        RegisterSubscriptionResponse data = subscriptionService.registerSubscription(
+                getCurrentUserId(), request, clientIp);
         return ResponseEntity.ok(ApiResponse.success(data,
-                "Đăng ký thẻ tháng thành công, vui lòng hoàn tất thanh toán trên MoMo"));
+                "Đăng ký thẻ tháng thành công, vui lòng hoàn tất thanh toán qua VNPay"));
     }
 
     /**
@@ -97,5 +101,16 @@ public class SubscriptionController {
 
     private Long getCurrentUserId() {
         return (Long) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+    }
+
+    /** Lấy IP thực của client, xử lý trường hợp đứng sau proxy/load balancer. */
+    private String getClientIp(HttpServletRequest request) {
+        String ip = request.getHeader("X-Forwarded-For");
+        if (ip != null && !ip.isBlank() && !"unknown".equalsIgnoreCase(ip)) {
+            return ip.split(",")[0].trim();
+        }
+        ip = request.getHeader("X-Real-IP");
+        if (ip != null && !ip.isBlank()) return ip;
+        return request.getRemoteAddr();
     }
 }

@@ -1,9 +1,19 @@
 spring:
-
   application:
     name: smart-parking
   config:
     import: optional:file:.env[.properties],optional:file:../.env[.properties]
+  mail:
+    host: smtp.gmail.com
+    port: 587
+    username: ${MAIL_USERNAME:your-email@gmail.com}
+    password: ${MAIL_PASSWORD:your-app-password}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
   datasource:
     url: jdbc:postgresql://aws-1-ap-southeast-2.pooler.supabase.com:6543/postgres?sslmode=require&prepareThreshold=0
     username: postgres.qbwkzamzeyouunzopeip
@@ -35,11 +45,19 @@ ekyc:
   # TODO: tạm tắt để test luồng đăng ký nhanh, nhớ đổi lại "true" trước khi demo/nghiệm thu
   validation-enabled: false
 
-momo:
-  personal:
-    phone: ${MOMO_PERSONAL_PHONE:0982094533}
-    name: ${MOMO_PERSONAL_NAME:PHAM NGUYEN QUYEN}
-    order-expire-minutes: ${MOMO_ORDER_EXPIRE_MINUTES:10}
+vnpay:
+  # Mã merchant cấp bởi VNPay (lấy từ sandbox: sandbox.vnpayment.vn)
+  tmn-code: ${VNP_TMN_CODE:YOUR_SANDBOX_TMN_CODE}
+  # Secret key để ký HMAC-SHA512
+  hash-secret: ${VNP_HASH_SECRET:YOUR_SANDBOX_HASH_SECRET}
+  # URL cổng thanh toán VNPay (sandbox)
+  pay-url: ${VNP_PAY_URL:https://sandbox.vnpayment.vn/paymentv2/vpcpay.html}
+  # BE nhận kết quả từ VNPay và redirect sang FE (phải đăng ký với VNPay)
+  return-url: ${VNP_RETURN_URL:http://localhost:8080/api/payments/vnpay/return}
+  # FE hiển thị kết quả sau khi BE xử lý return
+  fe-result-url: ${VNP_FE_RESULT_URL:http://localhost:5173/subscription/result}
+  # Thời gian hết hạn đơn hàng (phút)
+  order-expire-minutes: ${VNP_ORDER_EXPIRE_MINUTES:15}
 
 crypto:
   aes-secret-key: ${CRYPTO_AES_SECRET_KEY:SmartParkingAESKey2024VerySecure!}
