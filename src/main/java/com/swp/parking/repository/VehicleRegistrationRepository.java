@@ -55,7 +55,8 @@ public interface VehicleRegistrationRepository extends JpaRepository<VehicleRegi
               JOIN r.user u
               JOIN r.vehicleType vt
               LEFT JOIN r.requestedFeePackage fp
-             WHERE (:status IS NULL OR r.status = :status)
+             WHERE r.isDeleted = false
+               AND (:status IS NULL OR r.status = :status)
              ORDER BY r.createdAt DESC
             """)
     Page<VehicleRegistrationSummary> findSummaries(@Param("status") String status, Pageable pageable);
