@@ -13,6 +13,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -88,5 +89,12 @@ public class VehicleRegistrationController {
             @Valid @RequestBody AdminReviewRequest body) {
         VehicleRegistrationResponse result = service.adminReview(id, getCurrentUserId(), body);
         return ResponseEntity.ok(ApiResponse.success(result, "Xử lý đăng ký thành công"));
+    }
+
+    @DeleteMapping("/{id}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'STAFF')")
+    public ResponseEntity<ApiResponse<Void>> softDelete(@PathVariable Long id) {
+        service.softDelete(id, getCurrentUserId());
+        return ResponseEntity.ok(ApiResponse.success(null, "Xóa xe thành công"));
     }
 }

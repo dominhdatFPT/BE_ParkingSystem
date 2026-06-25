@@ -40,9 +40,9 @@ public class FeeSubscriptionService {
 
         List<Vehicle> vehicles;
         if (vehicleTypeId != null) {
-            vehicles = vehicleRepository.findByUserIdAndVehicleTypeId(userId, vehicleTypeId);
+            vehicles = vehicleRepository.findActiveByUserIdAndVehicleTypeId(userId, vehicleTypeId);
         } else {
-            vehicles = vehicleRepository.findByUserId(userId);
+            vehicles = vehicleRepository.findActiveByUserId(userId);
         }
 
         return vehicles.stream()

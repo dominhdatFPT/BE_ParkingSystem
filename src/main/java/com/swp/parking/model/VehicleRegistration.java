@@ -149,6 +149,13 @@ public class VehicleRegistration {
     @JoinColumn(name = "vehicle_id")
     private Vehicle vehicle;
 
+    @Builder.Default
+    @Column(name = "is_deleted")
+    private Boolean isDeleted = false;
+
+    @Column(name = "deleted_at")
+    private LocalDateTime deletedAt;
+
     @CreationTimestamp
     @Column(name = "created_at")
     private LocalDateTime createdAt;

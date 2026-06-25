@@ -7,7 +7,10 @@ import com.swp.parking.dto.ekyc.EkycValidationResult;
 import com.swp.parking.dto.request.AdminReviewRequest;
 import com.swp.parking.dto.request.VehicleRegistrationRequest;
 import com.swp.parking.dto.response.VehicleRegistrationResponse;
+import com.swp.parking.exception.AlreadyDeletedException;
 import com.swp.parking.exception.AppException;
+import com.swp.parking.exception.DuplicateLicensePlateException;
+import com.swp.parking.exception.NotFoundException;
 import com.swp.parking.model.Customer;
 import com.swp.parking.model.User;
 import com.swp.parking.model.Vehicle;
@@ -141,9 +144,8 @@ public class VehicleRegistrationService {
                     "Biển số nhập vào không khớp với ảnh biển số");
         }
 
-        if (registrationRepository.existsByUser_IdAndLicensePlateAndStatusIn(
-                userId, detectedPlate, List.of("PENDING", "APPROVED"))) {
-            throw new AppException(HttpStatus.CONFLICT, "Biển số đã đăng ký");
+        if (registrationRepository.existsByLicensePlateAndIsDeletedFalse(detectedPlate)) {
+            throw new DuplicateLicensePlateException("Biển số " + detectedPlate + " đã tồn tại trong hệ thống");
         }
 
         EkycCccdResult cccd = ekycService.ocrCccd(request.getCccdFrontImage());
@@ -397,6 +399,28 @@ public class VehicleRegistrationService {
         reg.setStatus(dto.getStatus());
         reg.setRejectReason(dto.getRejectReason());
         reg.setReviewedBy(admin);
+        reg.setReviewedAt(LocalDateTime.now());
+
+        return toResponse(registrationRepository.save(reg));
+    }
+
+    @Transactional
+    public VehicleRegistrationResponse softDelete(Long registrationId, Long deletedByUserId) {
+        log.info("Soft-deleting registration {} by userId {}", registrationId, deletedByUserId);
+
+        VehicleRegistration reg = registrationRepository.findById(registrationId)
+                .orElseThrow(() -> new NotFoundException("Không tìm thấy đăng ký xe với ID: " + registrationId));
+
+        if (Boolean.TRUE.equals(reg.getIsDeleted())) {
+            throw new AlreadyDeletedException("Xe này đã bị xóa trước đó");
+        }
+
+        User reviewer = userRepository.findById(deletedByUserId)
+                .orElseThrow(() -> new NotFoundException("Người dùng không tồn tại"));
+
+        reg.setIsDeleted(true);
+        reg.setDeletedAt(LocalDateTime.now());
+        reg.setReviewedBy(reviewer);
         reg.setReviewedAt(LocalDateTime.now());
 
         return toResponse(registrationRepository.save(reg));
