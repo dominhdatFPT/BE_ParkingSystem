@@ -44,13 +44,12 @@ public class OperationsDashboardService {
     public OperationsDashboardResponse getDashboard(LocalDate date) {
         LocalDate targetDate = date != null ? date : LocalDate.now();
         List<ParkingOperationsResponse.Slot> slots = readOperationSlots();
-        long activeCars = countActiveVehiclesByType("CAR");
-        long activeMotorbikes = countActiveVehiclesByType("MOTORBIKE");
-        long totalSlots = Math.max(slots.size(), countVisitorCards());
+        DashboardMetricsData dashboardMetrics = readDashboardMetrics(targetDate);
+        long totalSlots = Math.max(slots.size(), dashboardMetrics.visitorCards());
         long availableSlots = slots.isEmpty()
-                ? countAvailableVisitorCards()
+                ? dashboardMetrics.availableVisitorCards()
                 : slots.stream().filter(slot -> slot.getStatus() == ParkingSlotStatus.AVAILABLE).count();
-        long vehiclesInParking = countActiveParkingOrders();
+        long vehiclesInParking = dashboardMetrics.vehiclesInParking();
         if (vehiclesInParking == 0) {
             vehiclesInParking = slots.stream()
                     .filter(slot -> slot.getStatus() == ParkingSlotStatus.OCCUPIED || slot.getStatus() == ParkingSlotStatus.RESERVED)
@@ -60,17 +59,16 @@ public class OperationsDashboardService {
         OperationsDashboardResponse.Metrics metrics = OperationsDashboardResponse.Metrics.builder()
                 .vehiclesInParking(vehiclesInParking)
                 .availableSlots(availableSlots)
-                .pendingBookings(countPendingBookings())
-                .vehiclesInToday(countVehiclesInToday(targetDate))
-                .vehiclesInTodayCars(countVehiclesInTodayByType(targetDate, "CAR"))
-                .vehiclesInTodayMotorbikes(countVehiclesInTodayByType(targetDate, "MOTORBIKE"))
-                .vehiclesOutToday(countVehiclesOutToday(targetDate))
-                .vehiclesOutTodayCars(countVehiclesOutTodayByType(targetDate, "CAR"))
-                .vehiclesOutTodayMotorbikes(countVehiclesOutTodayByType(targetDate, "MOTORBIKE"))
-                .activeCars(activeCars)
-                .activeMotorbikes(activeMotorbikes)
-                .openIncidents(countOpenIncidents())
-                .revenueToday(sumRevenueToday(targetDate))
+                .vehiclesInToday(dashboardMetrics.vehiclesInToday())
+                .vehiclesInTodayCars(dashboardMetrics.vehiclesInTodayCars())
+                .vehiclesInTodayMotorbikes(dashboardMetrics.vehiclesInTodayMotorbikes())
+                .vehiclesOutToday(dashboardMetrics.vehiclesOutToday())
+                .vehiclesOutTodayCars(dashboardMetrics.vehiclesOutTodayCars())
+                .vehiclesOutTodayMotorbikes(dashboardMetrics.vehiclesOutTodayMotorbikes())
+                .activeCars(dashboardMetrics.activeCars())
+                .activeMotorbikes(dashboardMetrics.activeMotorbikes())
+                .openIncidents(dashboardMetrics.openIncidents())
+                .revenueToday(dashboardMetrics.revenueToday())
                 .totalSlots(totalSlots)
                 .occupancyRate(totalSlots > 0 ? (int) Math.round((vehiclesInParking * 100.0) / totalSlots) : 0)
                 .build();
@@ -79,10 +77,111 @@ public class OperationsDashboardService {
                 .metrics(metrics)
                 .areaOccupancy(buildAreaOccupancy(slots))
                 .trafficByHour(readTrafficByHour(targetDate))
-                .pendingBookings(readPendingBookings())
                 .recentIncidents(readRecentIncidents())
                 .recentVehicleActivities(readRecentVehicleActivities())
                 .build();
+    }
+
+    private DashboardMetricsData readDashboardMetrics(LocalDate date) {
+        String sql = """
+                WITH params AS (
+                    SELECT ?::date AS start_date, ?::date AS end_date
+                ),
+                order_metrics AS (
+                    SELECT
+                        COUNT(*) FILTER (
+                            WHERE po.parking_status = 'ACTIVE'
+                               OR (po.entry_time IS NOT NULL AND po.exit_time IS NULL)
+                        ) AS vehicles_in_parking,
+                        COUNT(*) FILTER (
+                            WHERE po.entry_time >= p.start_date AND po.entry_time < p.end_date
+                        ) AS vehicles_in_today,
+                        COUNT(*) FILTER (
+                            WHERE po.entry_time >= p.start_date AND po.entry_time < p.end_date
+                              AND %1$s = 'CAR'
+                        ) AS vehicles_in_today_cars,
+                        COUNT(*) FILTER (
+                            WHERE po.entry_time >= p.start_date AND po.entry_time < p.end_date
+                              AND %1$s = 'MOTORBIKE'
+                        ) AS vehicles_in_today_motorbikes,
+                        COUNT(*) FILTER (
+                            WHERE po.exit_time >= p.start_date AND po.exit_time < p.end_date
+                        ) AS vehicles_out_today,
+                        COUNT(*) FILTER (
+                            WHERE po.exit_time >= p.start_date AND po.exit_time < p.end_date
+                              AND %1$s = 'CAR'
+                        ) AS vehicles_out_today_cars,
+                        COUNT(*) FILTER (
+                            WHERE po.exit_time >= p.start_date AND po.exit_time < p.end_date
+                              AND %1$s = 'MOTORBIKE'
+                        ) AS vehicles_out_today_motorbikes,
+                        COUNT(*) FILTER (
+                            WHERE (po.parking_status = 'ACTIVE'
+                                OR (po.entry_time IS NOT NULL AND po.exit_time IS NULL))
+                              AND %1$s = 'CAR'
+                        ) AS active_cars,
+                        COUNT(*) FILTER (
+                            WHERE (po.parking_status = 'ACTIVE'
+                                OR (po.entry_time IS NOT NULL AND po.exit_time IS NULL))
+                              AND %1$s = 'MOTORBIKE'
+                        ) AS active_motorbikes,
+                        COUNT(*) FILTER (
+                            WHERE COALESCE(po.notes, '') <> ''
+                              AND COALESCE(po.parking_status, '') IN ('ISSUE', 'EXCEPTION', 'OPEN', 'ACTIVE')
+                        ) AS open_incidents,
+                        COALESCE(SUM(po.calculated_fee) FILTER (
+                            WHERE po.calculated_fee IS NOT NULL
+                              AND po.exit_time >= p.start_date AND po.exit_time < p.end_date
+                        ), 0) AS revenue_today
+                    FROM parking_orders po
+                    CROSS JOIN params p
+                    LEFT JOIN vehicles v ON v.vehicle_id = po.vehicle_id
+                    LEFT JOIN vehicle_types vt ON vt.vehicle_type_id = v.vehicle_type_id
+                ),
+                visitor_card_metrics AS (
+                    SELECT COUNT(*) AS visitor_cards,
+                           COUNT(*) FILTER (WHERE status = 'AVAILABLE') AS available_visitor_cards
+                    FROM visitor_cards
+                )
+                SELECT *
+                FROM order_metrics
+                CROSS JOIN visitor_card_metrics
+                """.formatted(vehicleTypeExpression());
+
+        try {
+            return jdbcTemplate.queryForObject(sql, (rs, rowNum) -> new DashboardMetricsData(
+                    rs.getLong("vehicles_in_parking"),
+                    rs.getLong("vehicles_in_today"),
+                    rs.getLong("vehicles_in_today_cars"),
+                    rs.getLong("vehicles_in_today_motorbikes"),
+                    rs.getLong("vehicles_out_today"),
+                    rs.getLong("vehicles_out_today_cars"),
+                    rs.getLong("vehicles_out_today_motorbikes"),
+                    rs.getLong("active_cars"),
+                    rs.getLong("active_motorbikes"),
+                    rs.getLong("open_incidents"),
+                    rs.getBigDecimal("revenue_today"),
+                    rs.getLong("visitor_cards"),
+                    rs.getLong("available_visitor_cards")
+            ), date, date.plusDays(1));
+        } catch (DataAccessException ex) {
+            log.warn("Could not read dashboard metrics in one query, using fallback queries: {}", ex.getMessage());
+            return new DashboardMetricsData(
+                    countActiveParkingOrders(),
+                    countVehiclesInToday(date),
+                    countVehiclesInTodayByType(date, "CAR"),
+                    countVehiclesInTodayByType(date, "MOTORBIKE"),
+                    countVehiclesOutToday(date),
+                    countVehiclesOutTodayByType(date, "CAR"),
+                    countVehiclesOutTodayByType(date, "MOTORBIKE"),
+                    countActiveVehiclesByType("CAR"),
+                    countActiveVehiclesByType("MOTORBIKE"),
+                    countOpenIncidents(),
+                    sumRevenueToday(date),
+                    countVisitorCards(),
+                    countAvailableVisitorCards()
+            );
+        }
     }
 
     public List<OperationsDashboardResponse.VehicleActivity> getParkingSessions() {
@@ -219,14 +318,6 @@ public class OperationsDashboardService {
                         .fillRate(counter.total > 0 ? (int) Math.round((counter.occupied * 100.0) / counter.total) : 0)
                         .build())
                 .toList();
-    }
-
-    private long countPendingBookings() {
-        return queryLong("""
-                SELECT COUNT(*)
-                FROM bookings
-                WHERE status IN ('WAITING_STAFF_APPROVAL', 'PENDING')
-                """);
     }
 
     private long countActiveParkingOrders() {
@@ -369,56 +460,6 @@ public class OperationsDashboardService {
             }, args);
         } catch (DataAccessException ex) {
             log.warn("Could not read traffic {} by hour: {}", type, ex.getMessage());
-        }
-    }
-
-    private List<OperationsDashboardResponse.RecentBooking> readPendingBookings() {
-        String sql = """
-                WITH first_floor AS (
-                    SELECT DISTINCT ON (floor_number)
-                        floor_id,
-                        floor_name,
-                        floor_number,
-                        parking_id
-                    FROM parking_floors
-                    ORDER BY floor_number, parking_id
-                )
-                SELECT
-                    b.id,
-                    u.user_id,
-                    u.full_name,
-                    ps.slot_number,
-                    pf.parking_name,
-                    fl.floor_name,
-                    b.status,
-                    b.start_time,
-                    b.end_time,
-                    b.created_at
-                FROM bookings b
-                LEFT JOIN users u ON u.user_id = b.user_id
-                LEFT JOIN parking_slots ps ON ps.id = b.parking_slot_id
-                LEFT JOIN first_floor fl ON fl.floor_number = ps.floor
-                LEFT JOIN parking_facilities pf ON pf.parking_id = fl.parking_id
-                WHERE b.status IN ('WAITING_STAFF_APPROVAL', 'PENDING')
-                ORDER BY b.created_at DESC
-                LIMIT 8
-                """;
-        try {
-            return jdbcTemplate.query(sql, (rs, rowNum) -> OperationsDashboardResponse.RecentBooking.builder()
-                    .id(getLong(rs, "id"))
-                    .userId(getLong(rs, "user_id"))
-                    .userFullName(rs.getString("full_name"))
-                    .slotNumber(rs.getString("slot_number"))
-                    .parkingName(rs.getString("parking_name"))
-                    .floorName(rs.getString("floor_name"))
-                    .status(rs.getString("status"))
-                    .startTime(getLocalDateTime(rs, "start_time"))
-                    .endTime(getLocalDateTime(rs, "end_time"))
-                    .createdAt(getLocalDateTime(rs, "created_at"))
-                    .build());
-        } catch (DataAccessException ex) {
-            log.warn("Could not read pending bookings for dashboard: {}", ex.getMessage());
-            return List.of();
         }
     }
 
@@ -588,5 +629,21 @@ public class OperationsDashboardService {
             this.floorNumber = floorNumber;
             this.areaKey = areaKey;
         }
+    }
+
+    private record DashboardMetricsData(
+            long vehiclesInParking,
+            long vehiclesInToday,
+            long vehiclesInTodayCars,
+            long vehiclesInTodayMotorbikes,
+            long vehiclesOutToday,
+            long vehiclesOutTodayCars,
+            long vehiclesOutTodayMotorbikes,
+            long activeCars,
+            long activeMotorbikes,
+            long openIncidents,
+            BigDecimal revenueToday,
+            long visitorCards,
+            long availableVisitorCards) {
     }
 }

@@ -18,7 +18,6 @@ public class OperationsDashboardResponse {
     private Metrics metrics;
     private List<AreaOccupancy> areaOccupancy;
     private List<TrafficPoint> trafficByHour;
-    private List<RecentBooking> pendingBookings;
     private List<RecentIncident> recentIncidents;
     private List<VehicleActivity> recentVehicleActivities;
 
@@ -29,7 +28,6 @@ public class OperationsDashboardResponse {
     public static class Metrics {
         private long vehiclesInParking;
         private long availableSlots;
-        private long pendingBookings;
         private long vehiclesInToday;
         private long vehiclesInTodayCars;
         private long vehiclesInTodayMotorbikes;
@@ -67,25 +65,6 @@ public class OperationsDashboardResponse {
         private String hour;
         private long in;
         private long out;
-    }
-
-    @Data
-    @Builder
-    @NoArgsConstructor
-    @AllArgsConstructor
-    public static class RecentBooking {
-        private Long id;
-        private Long userId;
-        private String userFullName;
-        private String slotNumber;
-        private String parkingName;
-        private String floorName;
-        private String zoneName;
-        private String status;
-        private String paymentStatus;
-        private LocalDateTime startTime;
-        private LocalDateTime endTime;
-        private LocalDateTime createdAt;
     }
 
     @Data

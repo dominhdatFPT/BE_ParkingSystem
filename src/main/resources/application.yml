@@ -27,6 +27,8 @@ app:
 
 ekyc:
   provider: google-vision
+  # The fields below are only used when provider is switched to VNPT.
+  # With provider=google-vision, authentication comes from Google Application Default Credentials.
   base-url: https://api.vnpt.vn/ekyc
   token: YOUR_VNPT_TOKEN
   token-id: YOUR_VNPT_TOKEN_ID
@@ -41,7 +43,3 @@ momo:
 
 crypto:
   aes-secret-key: ${CRYPTO_AES_SECRET_KEY:SmartParkingAESKey2024VerySecure!}
-
-gemini:
-  api-key: ${GEMINI_API_KEY:}
-  model: ${GEMINI_MODEL:gemini-2.5-flash}

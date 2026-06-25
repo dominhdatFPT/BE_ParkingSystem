@@ -51,10 +51,6 @@ public class SecurityConfig {
                         // User-only endpoints (must be checked before generic admin/staff rules)
                         .requestMatchers(HttpMethod.POST, "/api/v1/vehicle-registrations").hasRole("USER")
                         .requestMatchers(HttpMethod.GET, "/api/v1/vehicle-registrations/my").hasRole("USER")
-                        .requestMatchers(HttpMethod.GET, "/api/v1/bookings/my-bookings").authenticated()
-                        .requestMatchers(HttpMethod.POST, "/api/v1/bookings").authenticated()
-                        // User payment endpoint is covered by .anyRequest().authenticated()
-
                         // Admin/Staff management endpoints
                         .requestMatchers("/api/v1/admin/**").hasAnyRole("ADMIN", "STAFF")
                         .requestMatchers("/api/v1/staff/**").hasAnyRole("ADMIN", "STAFF")
@@ -72,13 +68,6 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, "/api/v1/fee-packages").hasAnyRole("ADMIN", "STAFF")
                         .requestMatchers(HttpMethod.PUT, "/api/v1/fee-packages/**").hasAnyRole("ADMIN", "STAFF")
                         .requestMatchers(HttpMethod.DELETE, "/api/v1/fee-packages/**").hasAnyRole("ADMIN", "STAFF")
-
-                        // Bookings management
-                        .requestMatchers(HttpMethod.GET, "/api/v1/bookings").hasAnyRole("ADMIN", "STAFF")
-                        .requestMatchers(HttpMethod.GET, "/api/v1/bookings/**").hasAnyRole("ADMIN", "STAFF")
-                        .requestMatchers(HttpMethod.POST, "/api/v1/bookings/admin-create").hasAnyRole("ADMIN", "STAFF")
-                        .requestMatchers(HttpMethod.PUT, "/api/v1/bookings/**").hasAnyRole("ADMIN", "STAFF")
-                        .requestMatchers(HttpMethod.DELETE, "/api/v1/bookings/**").hasAnyRole("ADMIN", "STAFF")
 
                         // Vehicle registrations management
                         .requestMatchers(HttpMethod.GET, "/api/v1/vehicle-registrations").hasAnyRole("ADMIN", "STAFF")

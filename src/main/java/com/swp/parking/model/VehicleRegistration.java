@@ -43,23 +43,25 @@ public class VehicleRegistration {
     @Column(name = "license_plate")
     private String licensePlate;
 
+    @Column(columnDefinition = "TEXT")
     private String brand;
 
+    @Column(columnDefinition = "TEXT")
     private String color;
 
-    @Column(name = "cccd_front_image")
+    @Column(name = "cccd_front_image", columnDefinition = "TEXT")
     private String cccdFrontImage;
 
-    @Column(name = "cccd_back_image")
+    @Column(name = "cccd_back_image", columnDefinition = "TEXT")
     private String cccdBackImage;
 
-    @Column(name = "license_image")
+    @Column(name = "license_image", columnDefinition = "TEXT")
     private String licenseImage;
 
-    @Column(name = "vehicle_document_image")
+    @Column(name = "vehicle_document_image", columnDefinition = "TEXT")
     private String vehicleDocumentImage;
 
-    @Column(name = "plate_image")
+    @Column(name = "plate_image", columnDefinition = "TEXT")
     private String plateImage;
 
     @Column(name = "ekyc_cccd_id")
@@ -88,10 +90,10 @@ public class VehicleRegistration {
     @Column(name = "ekyc_nationality")
     private String ekycNationality;
 
-    @Column(name = "ekyc_place_of_origin")
+    @Column(name = "ekyc_place_of_origin", columnDefinition = "TEXT")
     private String ekycPlaceOfOrigin;
 
-    @Column(name = "ekyc_place_of_residence")
+    @Column(name = "ekyc_place_of_residence", columnDefinition = "TEXT")
     private String ekycPlaceOfResidence;
 
     @Column(name = "ekyc_cccd_issue_date")
@@ -112,7 +114,7 @@ public class VehicleRegistration {
     @Column(name = "ekyc_license_expiry")
     private LocalDate ekycLicenseExpiry;
 
-    @Column(name = "ekyc_issuing_authority")
+    @Column(name = "ekyc_issuing_authority", columnDefinition = "TEXT")
     private String ekycIssuingAuthority;
 
     @Column(name = "ekyc_is_valid")
@@ -133,7 +135,7 @@ public class VehicleRegistration {
     @Builder.Default
     private String status = "PENDING";
 
-    @Column(name = "reject_reason")
+    @Column(name = "reject_reason", columnDefinition = "TEXT")
     private String rejectReason;
 
     @ManyToOne(fetch = FetchType.LAZY)

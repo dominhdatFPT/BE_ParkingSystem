@@ -62,7 +62,7 @@ public class EkycService {
                     extractGender(text),
                     extractNationality(text),
                     null,
-                    text,
+                    null,
                     null,
                     null,
                     calculateConfidence(text)

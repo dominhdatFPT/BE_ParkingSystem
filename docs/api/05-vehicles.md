@@ -6,8 +6,8 @@
 
 | Method | Endpoint | Mô tả | Auth | Request DTO | Response |
 |--------|----------|-------|------|-------------|----------|
-| `POST` | `/api/v1/vehicle-registrations` | Tạo đăng ký xe mới | Authenticated | `VehicleRegistrationRequest` | `ApiResponse<VehicleRegistrationResponse>` |
-| `GET` | `/api/v1/vehicle-registrations/my` | Lấy đăng ký xe của user hiện tại | Authenticated | - | `ApiResponse<List<VehicleRegistrationResponse>>` |
+| `POST` | `/api/v1/vehicle-registrations` | Tạo đăng ký xe mới | `USER` | `VehicleRegistrationRequest` | `ApiResponse<VehicleRegistrationResponse>` |
+| `GET` | `/api/v1/vehicle-registrations/my` | Lấy đăng ký xe của user hiện tại | `USER` | - | `ApiResponse<List<VehicleRegistrationResponse>>` |
 | `GET` | `/api/v1/vehicle-registrations/pending` | Lấy danh sách chờ duyệt | `ADMIN`, `STAFF` | `page`, `size` | `ApiResponse<Page<VehicleRegistrationResponse>>` |
 | `GET` | `/api/v1/vehicle-registrations` | Lấy tất cả đăng ký xe | `ADMIN`, `STAFF` | `status`, `page`, `size` | `ApiResponse<Page<VehicleRegistrationResponse>>` |
 | `GET` | `/api/v1/vehicle-registrations/{id}` | Lấy chi tiết đăng ký xe | Authenticated | - | `ApiResponse<VehicleRegistrationResponse>` |
@@ -34,7 +34,7 @@ Request body `AdminReviewRequest` chứa thông tin quyết định duyệt/từ
 
 ## File liên quan
 
-- Controller: `src/main/java/com/java/parking/controller/VehicleRegistrationController.java`
-- Service: `src/main/java/com/java/parking/service/VehicleRegistrationService.java`
+- Controller: `src/main/java/com/swp/parking/controller/VehicleRegistrationController.java`
+- Service: `src/main/java/com/swp/parking/service/VehicleRegistrationService.java`
 - DTO Request: `VehicleRegistrationRequest.java`, `AdminReviewRequest.java`
 - DTO Response: `VehicleRegistrationResponse.java`

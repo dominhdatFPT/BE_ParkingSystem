@@ -52,7 +52,7 @@
 
 ## File liên quan
 
-- Controller: `src/main/java/com/java/parking/controller/AuthController.java`
-- Service: `src/main/java/com/java/parking/service/AuthService.java`
-- DTO Request: `src/main/java/com/java/parking/dto/request/LoginRequest.java`, `RegisterRequest.java`, `GoogleLoginRequest.java`
-- DTO Response: `src/main/java/com/java/parking/dto/response/AuthResponse.java`
+- Controller: `src/main/java/com/swp/parking/controller/AuthController.java`
+- Service: `src/main/java/com/swp/parking/service/AuthService.java`
+- DTO Request: `src/main/java/com/swp/parking/dto/request/LoginRequest.java`, `RegisterRequest.java`, `GoogleLoginRequest.java`
+- DTO Response: `src/main/java/com/swp/parking/dto/response/AuthResponse.java`

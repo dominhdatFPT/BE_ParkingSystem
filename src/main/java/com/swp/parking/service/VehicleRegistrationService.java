@@ -92,6 +92,35 @@ public class VehicleRegistrationService {
                 .build();
     }
 
+    private VehicleRegistrationResponse toSummaryResponse(
+            VehicleRegistrationRepository.VehicleRegistrationSummary reg) {
+        return VehicleRegistrationResponse.builder()
+                .registrationId(reg.getRegistrationId())
+                .userId(reg.getUserId())
+                .userFullName(reg.getUserFullName())
+                .vehicleTypeId(reg.getVehicleTypeId())
+                .vehicleTypeName(reg.getVehicleTypeName())
+                .licensePlate(reg.getLicensePlate())
+                .contactPhone(reg.getContactPhone())
+                .requestedFeePackageId(reg.getRequestedFeePackageId())
+                .requestedFeePackageName(reg.getRequestedFeePackageName())
+                .registrationSource(reg.getRegistrationSource())
+                .brand(reg.getBrand())
+                .color(reg.getColor())
+                .status(reg.getStatus())
+                .rejectReason(reg.getRejectReason())
+                .ekycFullName(reg.getEkycFullName())
+                .ekycCccdId(reg.getEkycCccdId())
+                .ekycLicenseNumber(reg.getEkycLicenseNumber())
+                .ekycLicenseClass(reg.getEkycLicenseClass())
+                .ekycIsValid(reg.getEkycIsValid())
+                .ekycIsFake(reg.getEkycIsFake())
+                .ekycConfidenceScore(reg.getEkycConfidenceScore())
+                .createdAt(reg.getCreatedAt())
+                .reviewedAt(reg.getReviewedAt())
+                .build();
+    }
+
     @Transactional
     public VehicleRegistrationResponse createRegistration(Long userId, VehicleRegistrationRequest request) {
         log.info("Creating vehicle registration for userId: {}", userId);
@@ -180,24 +209,24 @@ public class VehicleRegistrationService {
                 .licenseImage(request.getLicenseImage())
                 .vehicleDocumentImage(request.getVehicleDocumentImage())
                 .plateImage(request.getPlateImage())
-                .ekycCccdId(cccd != null ? cccd.getId() : null)
-                .ekycFullName(cccd != null ? cccd.getFullName() : null)
+                .ekycCccdId(limit(cccd != null ? cccd.getId() : null, 255))
+                .ekycFullName(limit(cccd != null ? cccd.getFullName() : null, 255))
                 .ekycDateOfBirth(cccd != null ? parseDate(cccd.getDateOfBirth()) : null)
-                .ekycGender(cccd != null ? cccd.getGender() : null)
-                .ekycNationality(cccd != null ? cccd.getNationality() : null)
+                .ekycGender(limit(cccd != null ? cccd.getGender() : null, 255))
+                .ekycNationality(limit(cccd != null ? cccd.getNationality() : null, 255))
                 .ekycPlaceOfOrigin(cccd != null ? cccd.getPlaceOfOrigin() : null)
                 .ekycPlaceOfResidence(cccd != null ? cccd.getPlaceOfResidence() : null)
                 .ekycCccdIssueDate(cccd != null ? parseDate(cccd.getIssueDate()) : null)
                 .ekycCccdExpiryDate(cccd != null ? parseDate(cccd.getExpiryDate()) : null)
-                .ekycLicenseNumber(license != null ? license.getLicenseNumber() : null)
-                .ekycLicenseClass(license != null ? license.getLicenseClass() : null)
+                .ekycLicenseNumber(limit(license != null ? license.getLicenseNumber() : null, 255))
+                .ekycLicenseClass(limit(license != null ? license.getLicenseClass() : null, 255))
                 .ekycLicenseIssueDate(license != null ? parseDate(license.getIssueDate()) : null)
                 .ekycLicenseExpiry(license != null ? parseDate(license.getExpiryDate()) : null)
                 .ekycIssuingAuthority(license != null ? license.getIssuingAuthority() : null)
                 .ekycIsValid(validation != null ? validation.getIsValid() : null)
                 .ekycIsFake(validation != null ? validation.getIsFake() : null)
                 .ekycConfidenceScore(confidenceScore)
-                .ekycDocumentType(validation != null ? validation.getDocumentType() : null)
+                .ekycDocumentType(limit(validation != null ? validation.getDocumentType() : null, 255))
                 .registrationSource("VERIFIED_DOCUMENTS")
                 .status("PENDING")
                 .build();
@@ -259,6 +288,12 @@ public class VehicleRegistrationService {
         return second == null || second.isBlank() ? null : second.trim();
     }
 
+    private String limit(String value, int maxLength) {
+        if (value == null) return null;
+        String trimmed = value.trim();
+        return trimmed.length() <= maxLength ? trimmed : trimmed.substring(0, maxLength);
+    }
+
     private String normalizePersonName(String value) {
         return java.text.Normalizer.normalize(value, java.text.Normalizer.Form.NFD)
                 .replaceAll("\\p{M}", "")
@@ -271,18 +306,17 @@ public class VehicleRegistrationService {
     @Transactional(readOnly = true)
     public List<VehicleRegistrationResponse> getMyRegistrations(Long userId) {
         log.info("Getting registrations for userId: {}", userId);
-        return registrationRepository.findByUser_IdOrderByCreatedAtDesc(userId)
+        return registrationRepository.findSummariesByUserId(userId)
                 .stream()
-                .map(this::toResponse)
+                .map(this::toSummaryResponse)
                 .collect(Collectors.toList());
     }
 
     @Transactional(readOnly = true)
     public Page<VehicleRegistrationResponse> getPendingRegistrations(int page, int size) {
         log.info("Admin fetching pending page: {}", page);
-        return registrationRepository
-                .findByStatusOrderByCreatedAtDesc("PENDING", PageRequest.of(page, size))
-                .map(this::toResponse);
+        return registrationRepository.findSummaries("PENDING", PageRequest.of(page, size))
+                .map(this::toSummaryResponse);
     }
 
     @Transactional(readOnly = true)
@@ -290,13 +324,11 @@ public class VehicleRegistrationService {
         log.info("Back-office fetching registrations status: {}, page: {}", status, page);
         PageRequest pageRequest = PageRequest.of(page, size);
 
-        if (status == null || status.isBlank() || "ALL".equalsIgnoreCase(status)) {
-            return registrationRepository.findAllByOrderByCreatedAtDesc(pageRequest)
-                    .map(this::toResponse);
-        }
-
-        return registrationRepository.findByStatusOrderByCreatedAtDesc(status.toUpperCase(), pageRequest)
-                .map(this::toResponse);
+        String normalizedStatus = (status == null || status.isBlank() || "ALL".equalsIgnoreCase(status))
+                ? null
+                : status.toUpperCase();
+        return registrationRepository.findSummaries(normalizedStatus, pageRequest)
+                .map(this::toSummaryResponse);
     }
 
     @Transactional(readOnly = true)

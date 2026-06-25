@@ -18,4 +18,5 @@ public interface ParkingSlotRepository extends JpaRepository<ParkingSlot, Long> 
     boolean existsBySlotNumberAndFloor(String slotNumber, Integer floor);
 
     List<ParkingSlot> findByFloor(Integer floor);
+
 }
