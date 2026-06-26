@@ -335,7 +335,7 @@ public class VehicleRegistrationService {
 
     @Transactional(readOnly = true)
     public VehicleRegistrationResponse getById(Long registrationId, Long requestingUserId, String role) {
-        VehicleRegistration reg = registrationRepository.findById(registrationId)
+        VehicleRegistration reg = registrationRepository.findByIdAndNotDeleted(registrationId)
                 .orElseThrow(() -> new AppException(HttpStatus.NOT_FOUND, "Không tìm thấy đăng ký"));
 
         if (!"ADMIN".equals(role) && !"STAFF".equals(role) && !reg.getUser().getId().equals(requestingUserId)) {
@@ -358,7 +358,7 @@ public class VehicleRegistrationService {
             throw new AppException(HttpStatus.BAD_REQUEST, "Cần nhập lý do từ chối");
         }
 
-        VehicleRegistration reg = registrationRepository.findById(registrationId)
+        VehicleRegistration reg = registrationRepository.findByIdAndNotDeleted(registrationId)
                 .orElseThrow(() -> new AppException(HttpStatus.NOT_FOUND, "Không tìm thấy đăng ký"));
 
         if (!"PENDING".equals(reg.getStatus())) {

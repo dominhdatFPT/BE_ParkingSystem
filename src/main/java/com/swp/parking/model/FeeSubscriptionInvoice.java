@@ -36,6 +36,7 @@ public class FeeSubscriptionInvoice {
     @Column(name = "status", nullable = false)
     private InvoiceStatus status;
 
+    // ── MoMo (legacy — giữ lại cho dữ liệu cũ) ──────────────────────
     @Column(name = "momo_order_id", unique = true)
     private String momoOrderId;
 
@@ -44,6 +45,15 @@ public class FeeSubscriptionInvoice {
 
     @Column(name = "momo_trans_id")
     private Long momoTransId;
+
+    // ── VNPay ────────────────────────────────────────────────────────
+    // Mã tham chiếu gửi lên VNPay (vnp_TxnRef), liên kết với bảng vnpay_order
+    @Column(name = "vnp_txn_ref", length = 50)
+    private String vnpTxnRef;
+
+    // Mã giao dịch VNPay trả về (vnp_TransactionNo) dùng để tra soát
+    @Column(name = "vnp_transaction_no", length = 100)
+    private String vnpTransactionNo;
 
     @Column(name = "message", length = 512)
     private String message;

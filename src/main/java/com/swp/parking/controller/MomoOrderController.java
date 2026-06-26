@@ -115,7 +115,7 @@ public class MomoOrderController {
 
         // 2. Kích hoạt subscription liên kết
         try {
-            subscriptionService.activateSubscription(order.getSubscriptionId(), transactionId);
+            subscriptionService.activateSubscriptionVnpay(order.getSubscriptionId(), transactionId);
         } catch (AppException e) {
             log.warn("activateSubscription failed sau khi confirmPaid – orderId={}: {}", orderId, e.getMessage());
             throw e;

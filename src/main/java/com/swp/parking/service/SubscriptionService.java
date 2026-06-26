@@ -1,6 +1,5 @@
 package com.swp.parking.service;
 
-import com.swp.parking.dto.request.MomoIpnRequest;
 import com.swp.parking.dto.request.SubscriptionRegisterRequest;
 import com.swp.parking.dto.response.MyVehicleResponse;
 import com.swp.parking.dto.response.RegisterSubscriptionResponse;
@@ -12,7 +11,7 @@ import com.swp.parking.model.FeePackage;
 import com.swp.parking.model.FeePackagePriceHistory;
 import com.swp.parking.model.FeeSubscription;
 import com.swp.parking.model.FeeSubscriptionInvoice;
-import com.swp.parking.model.MomoOrder;
+import com.swp.parking.model.VNPayOrder;
 import com.swp.parking.model.Vehicle;
 import com.swp.parking.model.enums.InvoiceStatus;
 import com.swp.parking.model.enums.SubscriptionStatus;
@@ -34,8 +33,8 @@ import java.util.stream.Collectors;
 /**
  * Service duy nhất quản lý toàn bộ vòng đời thẻ tháng:
  *   1. Danh sách xe của user (để chọn khi đăng ký)
- *   2. Đăng ký thẻ tháng → tạo link thanh toán MoMo
- *   3. Xử lý IPN callback từ MoMo → kích hoạt / từ chối subscription
+ *   2. Đăng ký thẻ tháng → tạo link thanh toán VNPay
+ *   3. Kích hoạt subscription khi VNPay IPN xác nhận thành công
  *   4. Hủy subscription theo ID
  *   5. Hủy tự động gia hạn (cancel auto-renew)
  *   6. Xem lịch sử thẻ tháng của user
@@ -51,7 +50,7 @@ public class SubscriptionService {
     private final FeePackagePriceHistoryRepository priceHistoryRepository;
     private final VehicleRepository vehicleRepository;
     private final CryptoService cryptoService;
-    private final MomoQrService momoQrService;
+    private final VNPayService vnPayService;
 
     // ─────────────────────────────────────────────────────────────────
     // 1. Danh sách xe của user
@@ -86,18 +85,21 @@ public class SubscriptionService {
     // ─────────────────────────────────────────────────────────────────
 
     /**
-     * Tạo subscription {@code PENDING_PAYMENT} rồi gọi MoMo lấy link thanh toán.
+     * Tạo subscription {@code PENDING_PAYMENT} rồi gọi VNPay lấy link thanh toán.
      * <ol>
      *   <li>Xác minh xe thuộc user.</li>
      *   <li>Kiểm tra xe chưa có subscription ACTIVE.</li>
      *   <li>Lấy gói + giá hiện hành.</li>
      *   <li>Lưu subscription + invoice kỳ đầu.</li>
-     *   <li>Gọi MoMo {@code payAndSendToken} → trả payUrl/deeplink/qrCodeUrl.</li>
+     *   <li>Gọi VNPay tạo payment URL → FE redirect sang trang thanh toán VNPay.</li>
      * </ol>
+     *
+     * @param clientIp IP người dùng (bắt buộc theo VNPay spec)
      */
     @Transactional
     public RegisterSubscriptionResponse registerSubscription(Long userId,
-                                                             SubscriptionRegisterRequest request) {
+                                                             SubscriptionRegisterRequest request,
+                                                             String clientIp) {
         // Xác minh quyền sở hữu xe
         if (!vehicleRepository.existsByIdAndCustomer_User_Id(request.getVehicleId(), userId)) {
             throw new AppException(HttpStatus.FORBIDDEN, "Phương tiện không thuộc về tài khoản của bạn");
@@ -156,113 +158,53 @@ public class SubscriptionService {
                 .build();
         invoice = invoiceRepository.save(invoice);
 
-        // Sinh QR code động cho tài khoản MoMo cá nhân
-        MomoOrder momoOrder = momoQrService.createOrder(
+        // Tạo link thanh toán VNPay
+        long amountLong = priceHistory.getPrice().longValue();
+        VNPayOrder vnPayOrder = vnPayService.createPaymentUrl(
                 userId,
                 subscription.getId(),
                 invoice.getId(),
-                priceHistory.getPrice(),
-                orderInfo);
+                amountLong,
+                orderInfo,
+                clientIp);
 
-        // Lưu orderId vào invoice để trace sau này
-        invoice.setMomoOrderId(momoOrder.getOrderId());
+        // Lưu txnRef vào invoice để trace sau này
+        invoice.setVnpTxnRef(vnPayOrder.getTxnRef());
         invoiceRepository.save(invoice);
 
-        log.info("Subscription {} (gói: {}) → PENDING_PAYMENT, momoOrderId={}",
-                subscription.getId(), feePackage.getName(), momoOrder.getOrderId());
+        log.info("Subscription {} (gói: {}) → PENDING_PAYMENT, vnpTxnRef={}",
+                subscription.getId(), feePackage.getName(), vnPayOrder.getTxnRef());
 
         return RegisterSubscriptionResponse.builder()
                 .subscriptionId(subscription.getId())
                 .invoiceId(invoice.getId())
-                .momoOrderId(momoOrder.getOrderId())
-                .momoAccount(momoOrder.getMomoAccount())
-                .momoName(momoOrder.getMomoName())
-                .qrCodeData(momoOrder.getQrCodeData())
-                .expiredAt(momoOrder.getExpiredAt())
-                .message("Quét mã QR bằng app MoMo để chuyển tiền đến " + momoOrder.getMomoName()
-                        + " (" + momoOrder.getMomoAccount() + ")")
+                .vnpTxnRef(vnPayOrder.getTxnRef())
+                .paymentUrl(vnPayOrder.getPaymentUrl())
+                .expiredAt(vnPayOrder.getExpiredAt())
+                .message("Nhấn 'Thanh toán' để chuyển sang trang VNPay. Sau khi thanh toán, bạn sẽ được chuyển về tự động.")
                 .build();
     }
 
     // ─────────────────────────────────────────────────────────────────
-    // 3. Xử lý IPN callback từ MoMo
+    // 4. Kích hoạt subscription qua VNPay IPN (tự động)
     // ─────────────────────────────────────────────────────────────────
 
     /**
-     * Xử lý IPN do MoMo gửi sau khi user hoàn tất thanh toán.
-     * <ul>
-     *   <li>resultCode == 0: ACTIVE, lưu partnerToken (nếu autoRenew), set startDate/endDate.</li>
-     *   <li>resultCode != 0: EXPIRED, đánh dấu invoice FAILED.</li>
-     * </ul>
-     */
-    @Transactional
-    public void processIpnCallback(MomoIpnRequest ipn, Long subscriptionId, String callbackToken) {
-        FeeSubscription subscription = subscriptionRepository.findById(subscriptionId)
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        "Không tìm thấy subscription: " + subscriptionId));
-
-        FeeSubscriptionInvoice invoice = invoiceRepository
-                .findByFeeSubscriptionIdOrderByCreatedAtDesc(subscriptionId)
-                .stream()
-                .filter(inv -> ipn.getOrderId().equals(inv.getMomoOrderId()))
-                .findFirst()
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        "Không tìm thấy hóa đơn với orderId: " + ipn.getOrderId()));
-
-        if (ipn.getResultCode() == 0) {
-            // Lưu partnerToken (mã hóa AES) để dùng cho các lần auto-renew tiếp theo
-            if (Boolean.TRUE.equals(subscription.getIsAutoRenew())
-                    && callbackToken != null && !callbackToken.isBlank()) {
-                subscription.setMomoPartnerToken(cryptoService.encrypt(callbackToken));
-                log.info("partnerToken lưu (AES) cho subscription {}", subscriptionId);
-            }
-
-            LocalDateTime now = LocalDateTime.now();
-            int months = subscription.getFeePackage().getDurationMonths();
-            subscription.setStartDate(now);
-            subscription.setEndDate(now.plusMonths(months));
-            subscription.setStatus(SubscriptionStatus.ACTIVE);
-            subscriptionRepository.save(subscription);
-
-            invoice.setStatus(InvoiceStatus.SUCCESS);
-            invoice.setMomoTransId(ipn.getTransId());
-            invoice.setMessage(ipn.getMessage());
-            invoiceRepository.save(invoice);
-
-            log.info("Subscription {} → ACTIVE ({} tháng), hết hạn: {}",
-                    subscriptionId, months, subscription.getEndDate());
-        } else {
-            // Thanh toán kỳ đầu thất bại → subscription chưa bao giờ ACTIVE → CANCELLED
-            // (EXPIRED chỉ dùng khi subscription đã active nhưng auto-renew thất bại)
-            subscription.setStatus(SubscriptionStatus.CANCELLED);
-            subscriptionRepository.save(subscription);
-
-            invoice.setStatus(InvoiceStatus.FAILED);
-            invoice.setMessage(ipn.getMessage());
-            invoiceRepository.save(invoice);
-
-            log.warn("Subscription {} → CANCELLED do thanh toán thất bại (resultCode={}): {}",
-                    subscriptionId, ipn.getResultCode(), ipn.getMessage());
-        }
-    }
-
-    // ─────────────────────────────────────────────────────────────────
-    // 4. Kích hoạt subscription sau khi admin xác nhận thanh toán MoMo
-    // ─────────────────────────────────────────────────────────────────
-
-    /**
-     * Được gọi từ MomoOrderController khi admin xác nhận đã nhận tiền.
+     * Được gọi từ VNPayController sau khi IPN xác nhận thanh toán thành công.
      * Chuyển subscription PENDING_PAYMENT → ACTIVE và invoice PENDING → SUCCESS.
+     *
+     * @param transactionNo Mã giao dịch VNPay (vnp_TransactionNo)
      */
     @Transactional
-    public void activateSubscription(Long subscriptionId, String transactionId) {
+    public void activateSubscriptionVnpay(Long subscriptionId, String transactionNo) {
         FeeSubscription subscription = subscriptionRepository.findById(subscriptionId)
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "Không tìm thấy subscription: " + subscriptionId));
 
         if (!SubscriptionStatus.PENDING_PAYMENT.equals(subscription.getStatus())) {
-            throw new AppException(HttpStatus.CONFLICT,
-                    "Subscription không ở trạng thái chờ thanh toán (hiện tại: " + subscription.getStatus() + ")");
+            log.warn("Subscription {} không ở PENDING_PAYMENT (hiện tại: {}), bỏ qua kích hoạt",
+                    subscriptionId, subscription.getStatus());
+            return;
         }
 
         LocalDateTime now = LocalDateTime.now();
@@ -279,17 +221,11 @@ public class SubscriptionService {
                 .findFirst()
                 .ifPresent(inv -> {
                     inv.setStatus(InvoiceStatus.SUCCESS);
-                    if (transactionId != null && !transactionId.isBlank()) {
-                        try {
-                            inv.setMomoTransId(Long.parseLong(transactionId));
-                        } catch (NumberFormatException ignored) {
-                            // transactionId không phải số, bỏ qua
-                        }
-                    }
+                    inv.setVnpTransactionNo(transactionNo);
                     invoiceRepository.save(inv);
                 });
 
-        log.info("Subscription {} → ACTIVE ({} tháng), hết hạn: {}",
+        log.info("Subscription {} → ACTIVE ({} tháng) qua VNPay, hết hạn: {}",
                 subscriptionId, months, subscription.getEndDate());
     }
 
@@ -319,7 +255,6 @@ public class SubscriptionService {
 
         subscription.setStatus(SubscriptionStatus.CANCELLED);
         subscription.setIsAutoRenew(false);
-        subscription.setMomoPartnerToken(null);
         subscriptionRepository.save(subscription);
 
         log.info("User {} hủy subscription {}", userId, subscriptionId);
@@ -358,7 +293,6 @@ public class SubscriptionService {
                         "Không tìm thấy gói đang hoạt động với tính năng tự động gia hạn"));
 
         active.setIsAutoRenew(false);
-        active.setMomoPartnerToken(null);
         subscriptionRepository.save(active);
 
         log.info("User {} tắt auto-renew cho subscription {}", userId, active.getId());
@@ -385,6 +319,8 @@ public class SubscriptionService {
         return invoiceRepository.findAllByUserId(userId).stream()
                 .map(inv -> SubscriptionInvoiceResponse.builder()
                         .id(inv.getId())
+                        .vnpTxnRef(inv.getVnpTxnRef())
+                        .vnpTransactionNo(inv.getVnpTransactionNo())
                         .momoOrderId(inv.getMomoOrderId())
                         .momoTransId(inv.getMomoTransId())
                         .amount(inv.getAmount())

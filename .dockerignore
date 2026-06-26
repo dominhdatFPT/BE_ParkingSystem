@@ -1,5 +1,11 @@
 .git
 .idea
+.vscode
 target
 *.iml
 *.log
+.env
+.env.*
+!/.env.example
+firebase-service-account.json
+src/main/resources/firebase-service-account.json
