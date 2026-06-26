@@ -7,13 +7,18 @@ package-lock.json
 
 # IDE
 .idea/
+.vscode/
 *.iml
 
 # Environment & secrets
 .env
+.env.*
+!.env.example
 *.log
 secrets/
 google-vision-service-account.json
+firebase-service-account.json
+src/main/resources/firebase-service-account.json
 
 # OS
 .DS_Store

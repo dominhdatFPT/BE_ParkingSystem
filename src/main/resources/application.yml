@@ -4,60 +4,62 @@ spring:
   config:
     import: optional:file:.env[.properties],optional:file:../.env[.properties]
   mail:
-    host: smtp.gmail.com
-    port: 587
-    username: ${MAIL_USERNAME:your-email@gmail.com}
-    password: ${MAIL_PASSWORD:your-app-password}
+    host: ${MAIL_HOST:smtp.gmail.com}
+    port: ${MAIL_PORT:587}
+    username: ${MAIL_USERNAME}
+    password: ${MAIL_PASSWORD}
     properties:
       mail:
         smtp:
-          auth: true
+          auth: ${MAIL_SMTP_AUTH:true}
           starttls:
-            enable: true
+            enable: ${MAIL_SMTP_STARTTLS_ENABLE:true}
   datasource:
-    url: jdbc:postgresql://aws-1-ap-southeast-2.pooler.supabase.com:6543/postgres?sslmode=require&prepareThreshold=0
-    username: postgres.qbwkzamzeyouunzopeip
-    password: Dat04022005@111
-    driver-class-name: org.postgresql.Driver
+    url: ${SPRING_DATASOURCE_URL}
+    username: ${SPRING_DATASOURCE_USERNAME}
+    password: ${SPRING_DATASOURCE_PASSWORD}
+    driver-class-name: ${SPRING_DATASOURCE_DRIVER_CLASS_NAME:org.postgresql.Driver}
   jpa:
     hibernate:
-      ddl-auto: none
-    show-sql: true
-    open-in-view: false
+      ddl-auto: ${SPRING_JPA_HIBERNATE_DDL_AUTO:none}
+    show-sql: ${SPRING_JPA_SHOW_SQL:false}
+    open-in-view: ${SPRING_JPA_OPEN_IN_VIEW:false}
     properties:
       hibernate:
-        format_sql: true
+        format_sql: ${SPRING_JPA_PROPERTIES_HIBERNATE_FORMAT_SQL:false}
         jdbc:
-          time_zone: UTC
+          time_zone: ${SPRING_JPA_PROPERTIES_HIBERNATE_JDBC_TIME_ZONE:UTC}
+
+server:
+  port: ${PORT:8080}
 
 app:
   jwt:
-    secret: SmartParkingSecretKey2024VeryLongSecretForHS256Algorithm
-    expiration: 86400000
+    secret: ${APP_JWT_SECRET}
+    expiration: ${APP_JWT_EXPIRATION:86400000}
+
+gemini:
+  api-key: ${GEMINI_API_KEY}
+  model: ${GEMINI_MODEL:gemini-2.5-flash}
+
+firebase:
+  service-account-json: ${FIREBASE_SERVICE_ACCOUNT_JSON:}
+  service-account-path: ${FIREBASE_SERVICE_ACCOUNT_PATH:}
 
 ekyc:
-  provider: google-vision
-  # The fields below are only used when provider is switched to VNPT.
-  # With provider=google-vision, authentication comes from Google Application Default Credentials.
-  base-url: https://api.vnpt.vn/ekyc
-  token: YOUR_VNPT_TOKEN
-  token-id: YOUR_VNPT_TOKEN_ID
-  # TODO: tạm tắt để test luồng đăng ký nhanh, nhớ đổi lại "true" trước khi demo/nghiệm thu
-  validation-enabled: false
+  provider: ${EKYC_PROVIDER:google-vision}
+  base-url: ${EKYC_BASE_URL:https://api.vnpt.vn/ekyc}
+  token: ${EKYC_TOKEN:}
+  token-id: ${EKYC_TOKEN_ID:}
+  validation-enabled: ${EKYC_VALIDATION_ENABLED:false}
 
 vnpay:
-  # Mã merchant cấp bởi VNPay (lấy từ sandbox: sandbox.vnpayment.vn)
-  tmn-code: ${VNP_TMN_CODE:YOUR_SANDBOX_TMN_CODE}
-  # Secret key để ký HMAC-SHA512
-  hash-secret: ${VNP_HASH_SECRET:YOUR_SANDBOX_HASH_SECRET}
-  # URL cổng thanh toán VNPay (sandbox)
+  tmn-code: ${VNP_TMN_CODE}
+  hash-secret: ${VNP_HASH_SECRET}
   pay-url: ${VNP_PAY_URL:https://sandbox.vnpayment.vn/paymentv2/vpcpay.html}
-  # BE nhận kết quả từ VNPay và redirect sang FE (phải đăng ký với VNPay)
   return-url: ${VNP_RETURN_URL:http://localhost:8080/api/payments/vnpay/return}
-  # FE hiển thị kết quả sau khi BE xử lý return
   fe-result-url: ${VNP_FE_RESULT_URL:http://localhost:5173/subscription/result}
-  # Thời gian hết hạn đơn hàng (phút)
   order-expire-minutes: ${VNP_ORDER_EXPIRE_MINUTES:15}
 
 crypto:
-  aes-secret-key: ${CRYPTO_AES_SECRET_KEY:SmartParkingAESKey2024VerySecure!}
+  aes-secret-key: ${CRYPTO_AES_SECRET_KEY}
