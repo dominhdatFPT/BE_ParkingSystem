@@ -21,11 +21,11 @@ import java.nio.charset.StandardCharsets;
 @Configuration
 public class FirebaseConfig {
 
-    @Value("${firebase.service-account-json:}")
-    private String serviceAccountJson;
+    @Value("${FIREBASE_SERVICE_ACCOUNT_JSON:}")
+    private String firebaseJson;
 
-    @Value("${firebase.service-account-path:}")
-    private String serviceAccountPath;
+    @Value("${FIREBASE_SERVICE_ACCOUNT_PATH:}")
+    private String firebaseFilePath;
 
     @Bean
     public FirebaseApp firebaseApp() throws IOException {
@@ -40,15 +40,15 @@ public class FirebaseConfig {
     }
 
     private GoogleCredentials loadCredentials() throws IOException {
-        if (StringUtils.hasText(serviceAccountJson)) {
+        if (StringUtils.hasText(firebaseJson)) {
             try (InputStream serviceAccount = new ByteArrayInputStream(
-                    serviceAccountJson.getBytes(StandardCharsets.UTF_8))) {
+                    firebaseJson.getBytes(StandardCharsets.UTF_8))) {
                 return GoogleCredentials.fromStream(serviceAccount);
             }
         }
 
-        if (StringUtils.hasText(serviceAccountPath)) {
-            try (InputStream serviceAccount = new FileInputStream(serviceAccountPath)) {
+        if (StringUtils.hasText(firebaseFilePath)) {
+            try (InputStream serviceAccount = new FileInputStream(firebaseFilePath)) {
                 return GoogleCredentials.fromStream(serviceAccount);
             }
         }
