@@ -2,7 +2,7 @@ spring:
   application:
     name: smart-parking
   config:
-    import: optional:file:.env[.properties],optional:file:../.env[.properties]
+    import: optional:file:.env[.properties],optional:file:../.env[.properties],optional:file:/etc/secrets/.env[.properties]
   mail:
     host: ${MAIL_HOST:smtp.gmail.com}
     port: ${MAIL_PORT:587}
