@@ -9,4 +9,4 @@ FROM eclipse-temurin:17-jre
 WORKDIR /app
 COPY --from=build /app/target/*.jar app.jar
 EXPOSE 8080
-CMD ["java", "-Dserver.port=${PORT:-8080}", "-jar", "app.jar"]
+CMD ["java", "-jar", "app.jar"]
