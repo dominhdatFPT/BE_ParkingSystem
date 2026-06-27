@@ -134,22 +134,13 @@ public class VehicleRegistrationService {
                 .orElseThrow(() -> new AppException(HttpStatus.NOT_FOUND, "Loại xe không tồn tại"));
 
         String submittedPlate = normalizeLicensePlate(request.getLicensePlate());
-        String ocrPlate = normalizeLicensePlate(ekycService.ocrLicensePlate(request.getPlateImage()));
-        String detectedPlate = ocrPlate;
-        if (detectedPlate.isBlank()) {
+        if (submittedPlate.isBlank()) {
             throw new AppException(HttpStatus.BAD_REQUEST,
-                    "Khong doc duoc bien so xe tu anh. Vui long chup ro bien so va thu lai");
+                    "Vui long nhap bien so xe");
         }
 
-        if (ekycProperties.isValidationEnabled()
-                && !submittedPlate.isBlank()
-                && !containsPlate(ocrPlate, submittedPlate)) {
-            throw new AppException(HttpStatus.UNPROCESSABLE_ENTITY,
-                    "Biển số nhập vào không khớp với ảnh biển số");
-        }
-
-        if (registrationRepository.existsByLicensePlateAndIsDeletedFalse(detectedPlate)) {
-            throw new DuplicateLicensePlateException("Biển số " + detectedPlate + " đã tồn tại trong hệ thống");
+        if (registrationRepository.existsByLicensePlateAndIsDeletedFalse(submittedPlate)) {
+            throw new DuplicateLicensePlateException("Biển số " + submittedPlate + " đã tồn tại trong hệ thống");
         }
 
         EkycCccdResult cccd = ekycService.ocrCccd(request.getCccdFrontImage());
@@ -182,13 +173,13 @@ public class VehicleRegistrationService {
                 throw new AppException(HttpStatus.UNPROCESSABLE_ENTITY,
                         "Họ tên trên CCCD và bằng lái xe không khớp");
             }
-            if (!containsPlate(vehicleDocumentText, detectedPlate)) {
+            if (!containsPlate(vehicleDocumentText, submittedPlate)) {
                 throw new AppException(HttpStatus.UNPROCESSABLE_ENTITY,
-                        "Biển số trên giấy đăng ký xe không khớp với ảnh biển số");
+                        "Biển số trên giấy đăng ký xe không khớp với biển số nhập");
             }
         } else {
             log.warn("eKYC validation đang TẮT (ekyc.validation-enabled=false) - bỏ qua đối chiếu "
-                    + "chất lượng/độ tin cậy; dữ liệu xe vẫn được OCR từ ảnh và kiểm tra trùng biển số. "
+                    + "chất lượng/độ tin cậy; biển số do người dùng nhập vẫn được kiểm tra trùng. "
                     + "CHỈ dùng để test, nhớ bật lại trước khi demo/nghiệm thu.");
         }
         if (ekycProperties.isValidationEnabled()
@@ -207,7 +198,7 @@ public class VehicleRegistrationService {
         VehicleRegistration registration = VehicleRegistration.builder()
                 .user(user)
                 .vehicleType(vehicleType)
-                .licensePlate(detectedPlate)
+                .licensePlate(submittedPlate)
                 .brand(detectedBrand)
                 .color(detectedColor)
                 .cccdFrontImage(request.getCccdFrontImage())
