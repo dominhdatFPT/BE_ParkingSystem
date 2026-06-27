@@ -143,9 +143,9 @@ public class VehicleRegistrationService {
             throw new DuplicateLicensePlateException("Biển số " + submittedPlate + " đã tồn tại trong hệ thống");
         }
 
-        EkycCccdResult cccd = ekycService.ocrCccd(request.getCccdFrontImage());
-        EkycLicenseResult license = ekycService.ocrLicense(request.getLicenseImage());
-        String vehicleDocumentText = ekycService.ocrVehicleDocument(request.getVehicleDocumentImage());
+        EkycCccdResult cccd = readCccdBestEffort(request.getCccdFrontImage());
+        EkycLicenseResult license = readLicenseBestEffort(request.getLicenseImage());
+        String vehicleDocumentText = readVehicleDocumentBestEffort(request.getVehicleDocumentImage());
         String detectedBrand = firstNonBlank(
                 extractVehicleDocumentField(vehicleDocumentText,
                         "(?:NHÃN HIỆU|NHAN HIEU)(?:\\s*/\\s*(?:BRAND|MARK))?|BRAND|MARK"),
@@ -243,6 +243,42 @@ public class VehicleRegistrationService {
                     label + " bị mờ, thiếu nội dung hoặc không đủ chất lượng");
         }
         return result;
+    }
+
+    private EkycCccdResult readCccdBestEffort(String image) {
+        try {
+            return ekycService.ocrCccd(image);
+        } catch (AppException ex) {
+            if (ekycProperties.isValidationEnabled()) {
+                throw ex;
+            }
+            log.warn("Skipping CCCD OCR because eKYC validation is disabled: {}", ex.getMessage());
+            return null;
+        }
+    }
+
+    private EkycLicenseResult readLicenseBestEffort(String image) {
+        try {
+            return ekycService.ocrLicense(image);
+        } catch (AppException ex) {
+            if (ekycProperties.isValidationEnabled()) {
+                throw ex;
+            }
+            log.warn("Skipping driving license OCR because eKYC validation is disabled: {}", ex.getMessage());
+            return null;
+        }
+    }
+
+    private String readVehicleDocumentBestEffort(String image) {
+        try {
+            return ekycService.ocrVehicleDocument(image);
+        } catch (AppException ex) {
+            if (ekycProperties.isValidationEnabled()) {
+                throw ex;
+            }
+            log.warn("Skipping vehicle document OCR because eKYC validation is disabled: {}", ex.getMessage());
+            return "";
+        }
     }
 
     private boolean samePersonName(String first, String second) {
