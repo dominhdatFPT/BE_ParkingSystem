@@ -16,6 +16,7 @@ import javax.crypto.spec.SecretKeySpec;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
 
@@ -53,6 +54,7 @@ public class VNPayService {
     private int expireMinutes;
 
     private static final DateTimeFormatter VNP_DATE_FMT = DateTimeFormatter.ofPattern("yyyyMMddHHmmss");
+    private static final ZoneId VNP_TIME_ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
 
     // ─────────────────────────────────────────────────────────────────
     // 1. Tạo link thanh toán VNPay
@@ -74,7 +76,7 @@ public class VNPayService {
                                        Long amount, String orderInfo, String clientIp) {
 
         String txnRef = "VNP" + System.currentTimeMillis();
-        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime now = LocalDateTime.now(VNP_TIME_ZONE);
 
         // Tham số bắt buộc gửi lên VNPay
         Map<String, String> params = new TreeMap<>();
@@ -89,8 +91,9 @@ public class VNPayService {
         params.put("vnp_Locale", "vn");
         params.put("vnp_ReturnUrl", vnpReturnUrl);
         params.put("vnp_IpAddr", clientIp);
+        LocalDateTime expireAt = now.plusMinutes(expireMinutes);
         params.put("vnp_CreateDate", now.format(VNP_DATE_FMT));
-        params.put("vnp_ExpireDate", now.plusMinutes(expireMinutes).format(VNP_DATE_FMT));
+        params.put("vnp_ExpireDate", expireAt.format(VNP_DATE_FMT));
 
         // Xây dựng chuỗi hash theo đặc tả VNPay (sorted keys, URL-encode values)
         String hashData = buildHashData(params);
@@ -109,7 +112,7 @@ public class VNPayService {
                 .orderInfo(orderInfo)
                 .paymentUrl(paymentUrl)
                 .status(VNPayOrderStatus.PENDING)
-                .expiredAt(now.plusMinutes(expireMinutes))
+                .expiredAt(expireAt)
                 .build();
 
         VNPayOrder saved = vnPayOrderRepository.save(order);
@@ -166,7 +169,7 @@ public class VNPayService {
 
         if ("00".equals(responseCode)) {
             order.setStatus(VNPayOrderStatus.PAID);
-            order.setPaidAt(LocalDateTime.now());
+            order.setPaidAt(LocalDateTime.now(VNP_TIME_ZONE));
             log.info("[VNPay IPN] THÀNH CÔNG – txnRef={}, transactionNo={}", txnRef, transactionNo);
         } else {
             order.setStatus(VNPayOrderStatus.FAILED);
@@ -219,7 +222,7 @@ public class VNPayService {
 
     public boolean isExpired(VNPayOrder order) {
         return order.getExpiredAt() != null
-                && LocalDateTime.now().isAfter(order.getExpiredAt());
+                && LocalDateTime.now(VNP_TIME_ZONE).isAfter(order.getExpiredAt());
     }
 
     @Transactional
@@ -256,7 +259,7 @@ public class VNPayService {
         params.put("vnp_BankTranNo", "VNP" + System.currentTimeMillis());
         params.put("vnp_CardType", "ATM");
         params.put("vnp_OrderInfo", order.getOrderInfo() != null ? order.getOrderInfo() : "Test payment");
-        params.put("vnp_PayDate", LocalDateTime.now().format(VNP_DATE_FMT));
+        params.put("vnp_PayDate", LocalDateTime.now(VNP_TIME_ZONE).format(VNP_DATE_FMT));
         params.put("vnp_ResponseCode", responseCode);
         params.put("vnp_TmnCode", vnpTmnCode);
         params.put("vnp_TransactionNo", transactionNo);
