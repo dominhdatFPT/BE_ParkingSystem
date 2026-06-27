@@ -51,6 +51,7 @@ ekyc:
   base-url: ${EKYC_BASE_URL:https://api.vnpt.vn/ekyc}
   token: ${EKYC_TOKEN:}
   token-id: ${EKYC_TOKEN_ID:}
+  license-plate-path: ${EKYC_LICENSE_PLATE_PATH:/v1/ocr/license-plate}
   validation-enabled: ${EKYC_VALIDATION_ENABLED:false}
 
 vnpay:

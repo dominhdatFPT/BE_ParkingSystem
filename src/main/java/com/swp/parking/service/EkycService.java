@@ -24,6 +24,7 @@ import org.springframework.web.client.RestTemplate;
 
 import java.text.Normalizer;
 import java.util.Base64;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.regex.Matcher;
@@ -119,14 +120,12 @@ public class EkycService {
         if (isMockProvider()) {
             return "51F-12345";
         }
-        if (!isGoogleVisionProvider()) {
-            throw new AppException(HttpStatus.BAD_REQUEST,
-                    "Vui long nhap bien so xe de staff doi chieu voi anh khi duyet");
-        }
 
-        String text = detectText(base64Image, "license plate OCR")
-                .toUpperCase()
-                .replaceAll("[^A-Z0-9]", "");
+        String text = isGoogleVisionProvider()
+                ? detectText(base64Image, "license plate OCR")
+                : detectTextWithProvider(base64Image, "license plate OCR", ekycProperties.getLicensePlatePath());
+
+        text = text.toUpperCase().replaceAll("[^A-Z0-9]", "");
         Matcher matcher = Pattern.compile("\\d{2}[A-Z]{1,2}\\d{4,5}").matcher(text);
         if (!matcher.find()) {
             throw new AppException(HttpStatus.UNPROCESSABLE_ENTITY,
@@ -136,6 +135,61 @@ public class EkycService {
         String compact = matcher.group();
         int prefixLength = compact.length() - 5;
         return compact.substring(0, prefixLength) + "-" + compact.substring(prefixLength);
+    }
+
+    @SuppressWarnings("unchecked")
+    private String detectTextWithProvider(String base64Image, String action, String path) {
+        String effectivePath = path == null || path.isBlank() ? "/v1/ocr/license-plate" : path.trim();
+        String normalizedPath = effectivePath.startsWith("/") ? effectivePath : "/" + effectivePath;
+        String url = ekycProperties.getBaseUrl() + normalizedPath;
+
+        try {
+            Map<String, Object> response = restTemplate.postForObject(url, buildHttpEntity(base64Image), Map.class);
+            String text = findPlateCandidate(response);
+            return text != null ? text : "";
+        } catch (AppException ex) {
+            throw ex;
+        } catch (Exception ex) {
+            log.error("eKYC {} request failed: {}", action, ex.getMessage(), ex);
+            throw new AppException(HttpStatus.BAD_GATEWAY,
+                    "eKYC service unavailable: " + action + ". Kiem tra endpoint " + normalizedPath);
+        }
+    }
+
+    private String findPlateCandidate(Object value) {
+        if (value == null) {
+            return null;
+        }
+        if (value instanceof String text) {
+            Matcher matcher = Pattern.compile("\\d{2}\\s*[A-Z]{1,2}\\s*[-.]?\\s*\\d{4,5}", Pattern.CASE_INSENSITIVE)
+                    .matcher(text);
+            return matcher.find() ? matcher.group() : null;
+        }
+        if (value instanceof Map<?, ?> map) {
+            for (String key : List.of("licensePlate", "license_plate", "plate", "plateNumber", "number", "text", "value")) {
+                if (map.containsKey(key)) {
+                    String candidate = findPlateCandidate(map.get(key));
+                    if (candidate != null) {
+                        return candidate;
+                    }
+                }
+            }
+            for (Object nested : map.values()) {
+                String candidate = findPlateCandidate(nested);
+                if (candidate != null) {
+                    return candidate;
+                }
+            }
+        }
+        if (value instanceof Collection<?> collection) {
+            for (Object nested : collection) {
+                String candidate = findPlateCandidate(nested);
+                if (candidate != null) {
+                    return candidate;
+                }
+            }
+        }
+        return null;
     }
 
     public String ocrVehicleDocument(String base64Image) {

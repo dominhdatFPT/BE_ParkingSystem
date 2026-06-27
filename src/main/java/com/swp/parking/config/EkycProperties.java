@@ -19,6 +19,8 @@ public class EkycProperties {
 
     private String tokenId;
 
+    private String licensePlatePath = "/v1/ocr/license-plate";
+
     /**
      * Bật/tắt các bước đối chiếu nội dung giấy tờ (họ tên CCCD khớp bằng lái, biển số khớp giấy
      * đăng ký xe, ảnh không bị mờ/giả). Mặc định BẬT (true) cho môi trường thật. Tạm để false khi

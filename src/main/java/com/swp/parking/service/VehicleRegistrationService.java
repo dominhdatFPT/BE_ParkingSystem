@@ -134,13 +134,11 @@ public class VehicleRegistrationService {
                 .orElseThrow(() -> new AppException(HttpStatus.NOT_FOUND, "Loại xe không tồn tại"));
 
         String submittedPlate = normalizeLicensePlate(request.getLicensePlate());
-        String ocrPlate = isGoogleVisionProvider()
-                ? normalizeLicensePlate(ekycService.ocrLicensePlate(request.getPlateImage()))
-                : "";
-        String detectedPlate = !submittedPlate.isBlank() ? submittedPlate : ocrPlate;
+        String ocrPlate = normalizeLicensePlate(ekycService.ocrLicensePlate(request.getPlateImage()));
+        String detectedPlate = ocrPlate;
         if (detectedPlate.isBlank()) {
             throw new AppException(HttpStatus.BAD_REQUEST,
-                    "Vui long nhap bien so xe de staff doi chieu voi anh khi duyet");
+                    "Khong doc duoc bien so xe tu anh. Vui long chup ro bien so va thu lai");
         }
 
         if (ekycProperties.isValidationEnabled()
@@ -275,10 +273,6 @@ public class VehicleRegistrationService {
                 ? ""
                 : plate.toUpperCase().replaceAll("[^A-Z0-9]", "");
         return !normalizedPlate.isBlank() && normalizedDocument.contains(normalizedPlate);
-    }
-
-    private boolean isGoogleVisionProvider() {
-        return "google-vision".equalsIgnoreCase(ekycProperties.getProvider());
     }
 
     private String normalizeLicensePlate(String value) {
