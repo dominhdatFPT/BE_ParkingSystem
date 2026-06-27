@@ -12,9 +12,11 @@ import com.swp.parking.dto.request.ResetPasswordRequest;
 import com.swp.parking.dto.request.VerifyOtpRequest;
 import com.swp.parking.dto.response.AuthResponse;
 import com.swp.parking.exception.AppException;
+import com.swp.parking.model.Customer;
 import com.swp.parking.model.PasswordResetToken;
 import com.swp.parking.model.User;
 import com.swp.parking.model.enums.UserRole;
+import com.swp.parking.repository.CustomerRepository;
 import com.swp.parking.repository.PasswordResetTokenRepository;
 import com.swp.parking.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -35,6 +37,7 @@ import java.util.concurrent.ThreadLocalRandom;
 public class AuthService {
 
     private final UserRepository userRepository;
+    private final CustomerRepository customerRepository;
     private final PasswordResetTokenRepository passwordResetTokenRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtConfig jwtConfig;
@@ -72,6 +75,7 @@ public class AuthService {
                 .build();
 
         user = userRepository.save(user);
+        ensureCustomerProfile(user);
         user.setRole(UserRole.USER);
 
         // TODO: Gửi push notification chào mừng qua Firebase Admin SDK
@@ -122,8 +126,17 @@ public class AuthService {
                             .role(UserRole.USER)
                             .build();
                     log.info("Creating new user from Google login: {}", email);
-                    return userRepository.save(newUser);
+                    User savedUser = userRepository.save(newUser);
+                    ensureCustomerProfile(savedUser);
+                    return savedUser;
                 });
+    }
+
+    private Customer ensureCustomerProfile(User user) {
+        return customerRepository.findByUser_Id(user.getId())
+                .orElseGet(() -> customerRepository.save(Customer.builder()
+                        .user(user)
+                        .build()));
     }
 
     // ── Quên mật khẩu ────────────────────────────────────────────────

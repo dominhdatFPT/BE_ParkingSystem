@@ -134,8 +134,14 @@ public class VehicleRegistrationService {
                 .orElseThrow(() -> new AppException(HttpStatus.NOT_FOUND, "Loại xe không tồn tại"));
 
         String submittedPlate = normalizeLicensePlate(request.getLicensePlate());
-        String ocrPlate = normalizeLicensePlate(ekycService.ocrLicensePlate(request.getPlateImage()));
-        String detectedPlate = ocrPlate;
+        String ocrPlate = isGoogleVisionProvider()
+                ? normalizeLicensePlate(ekycService.ocrLicensePlate(request.getPlateImage()))
+                : "";
+        String detectedPlate = !submittedPlate.isBlank() ? submittedPlate : ocrPlate;
+        if (detectedPlate.isBlank()) {
+            throw new AppException(HttpStatus.BAD_REQUEST,
+                    "Vui long nhap bien so xe de staff doi chieu voi anh khi duyet");
+        }
 
         if (ekycProperties.isValidationEnabled()
                 && !submittedPlate.isBlank()
@@ -271,6 +277,10 @@ public class VehicleRegistrationService {
         return !normalizedPlate.isBlank() && normalizedDocument.contains(normalizedPlate);
     }
 
+    private boolean isGoogleVisionProvider() {
+        return "google-vision".equalsIgnoreCase(ekycProperties.getProvider());
+    }
+
     private String normalizeLicensePlate(String value) {
         return value == null ? "" : value.trim().toUpperCase(Locale.ROOT).replaceAll("\\s+", "");
     }
@@ -370,7 +380,9 @@ public class VehicleRegistrationService {
 
         if ("APPROVED".equals(dto.getStatus())) {
             Customer customer = customerRepository.findByUser_Id(reg.getUser().getId())
-                    .orElseThrow(() -> new AppException(HttpStatus.NOT_FOUND, "Customer profile chưa tồn tại"));
+                    .orElseGet(() -> customerRepository.save(Customer.builder()
+                            .user(reg.getUser())
+                            .build()));
 
             Vehicle vehicle = vehicleRepository.findByLicensePlate(reg.getLicensePlate())
                     .map(existingVehicle -> {

@@ -119,6 +119,10 @@ public class EkycService {
         if (isMockProvider()) {
             return "51F-12345";
         }
+        if (!isGoogleVisionProvider()) {
+            throw new AppException(HttpStatus.BAD_REQUEST,
+                    "Vui long nhap bien so xe de staff doi chieu voi anh khi duyet");
+        }
 
         String text = detectText(base64Image, "license plate OCR")
                 .toUpperCase()
@@ -137,6 +141,9 @@ public class EkycService {
     public String ocrVehicleDocument(String base64Image) {
         if (isMockProvider()) {
             return "GIAY CHUNG NHAN DANG KY XE 51F-12345 NGUYEN VAN A";
+        }
+        if (!isGoogleVisionProvider()) {
+            return "";
         }
         return detectText(base64Image, "vehicle registration OCR");
     }
