@@ -196,6 +196,8 @@ public class AuthService {
                     // Mọi role nhân viên còn lại (SECURITY, CASHIER, MANAGER, ...) đều gộp thành STAFF
                     return UserRole.STAFF;
                 })
-                .orElse(UserRole.USER);
+                .orElseGet(() -> userRepository.findById(userId)
+                        .map(User::getRole)
+                        .orElse(UserRole.USER));
     }
 }

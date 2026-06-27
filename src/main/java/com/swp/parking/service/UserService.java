@@ -93,6 +93,8 @@ public class UserService {
                         return UserRole.USER;
                     }
                 })
-                .orElse(UserRole.USER);
+                .orElseGet(() -> userRepository.findById(userId)
+                        .map(User::getRole)
+                        .orElse(UserRole.USER));
     }
 }

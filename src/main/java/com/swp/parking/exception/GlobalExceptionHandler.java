@@ -88,6 +88,12 @@ public class GlobalExceptionHandler {
         return handleAppException(ex);
     }
 
+    @ExceptionHandler(InvalidRoleException.class)
+    public ResponseEntity<Map<String, Object>> handleInvalidRoleException(InvalidRoleException ex) {
+        log.warn("InvalidRoleException: {}", ex.getMessage());
+        return handleAppException(ex);
+    }
+
     @ExceptionHandler(AlreadyDeletedException.class)
     public ResponseEntity<Map<String, Object>> handleAlreadyDeletedException(AlreadyDeletedException ex) {
         log.warn("AlreadyDeletedException: {}", ex.getMessage());
@@ -97,6 +103,12 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(DuplicateLicensePlateException.class)
     public ResponseEntity<Map<String, Object>> handleDuplicateLicensePlateException(DuplicateLicensePlateException ex) {
         log.warn("DuplicateLicensePlateException: {}", ex.getMessage());
+        return handleAppException(ex);
+    }
+
+    @ExceptionHandler(DuplicateEmailException.class)
+    public ResponseEntity<Map<String, Object>> handleDuplicateEmailException(DuplicateEmailException ex) {
+        log.warn("DuplicateEmailException: {}", ex.getMessage());
         return handleAppException(ex);
     }
 
