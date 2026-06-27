@@ -34,6 +34,5 @@ public class VehicleRegistrationRequest {
     @NotBlank
     private String vehicleDocumentImage;
 
-    @NotBlank
     private String plateImage;
 }
