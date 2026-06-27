@@ -47,7 +47,7 @@ firebase:
   service-account-path: ${FIREBASE_SERVICE_ACCOUNT_PATH:}
 
 ekyc:
-  provider: ${EKYC_PROVIDER:google-vision}
+  provider: ${EKYC_PROVIDER:vnpt}
   base-url: ${EKYC_BASE_URL:https://api.vnpt.vn/ekyc}
   token: ${EKYC_TOKEN:}
   token-id: ${EKYC_TOKEN_ID:}

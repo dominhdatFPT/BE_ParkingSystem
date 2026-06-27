@@ -120,6 +120,8 @@ public class EkycService {
         if (isMockProvider()) {
             return "51F-12345";
         }
+        log.info("Running license plate OCR with provider={}, path={}",
+                ekycProperties.getProvider(), ekycProperties.getLicensePlatePath());
 
         String text = isGoogleVisionProvider()
                 ? detectText(base64Image, "license plate OCR")
