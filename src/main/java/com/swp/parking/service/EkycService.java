@@ -120,8 +120,9 @@ public class EkycService {
         if (isMockProvider()) {
             return "51F-12345";
         }
-        log.info("Running license plate OCR with provider={}, path={}",
-                ekycProperties.getProvider(), ekycProperties.getLicensePlatePath());
+        String provider = effectiveProvider();
+        log.info("Running license plate OCR with provider={}, configuredProvider={}, path={}",
+                provider, ekycProperties.getProvider(), ekycProperties.getLicensePlatePath());
 
         String text = isGoogleVisionProvider()
                 ? detectText(base64Image, "license plate OCR")
@@ -236,11 +237,32 @@ public class EkycService {
     }
 
     private boolean isGoogleVisionProvider() {
-        return "google-vision".equalsIgnoreCase(ekycProperties.getProvider());
+        return "google-vision".equalsIgnoreCase(effectiveProvider());
     }
 
     private boolean isMockProvider() {
-        return "mock".equalsIgnoreCase(ekycProperties.getProvider());
+        return "mock".equalsIgnoreCase(effectiveProvider());
+    }
+
+    private String effectiveProvider() {
+        String configuredProvider = ekycProperties.getProvider();
+        if ("mock".equalsIgnoreCase(configuredProvider)) {
+            return "mock";
+        }
+        if (hasVnptCredentials()) {
+            return "vnpt";
+        }
+        return configuredProvider;
+    }
+
+    private boolean hasVnptCredentials() {
+        return hasText(ekycProperties.getToken())
+                && hasText(ekycProperties.getTokenId())
+                && hasText(ekycProperties.getBaseUrl());
+    }
+
+    private boolean hasText(String value) {
+        return value != null && !value.isBlank();
     }
 
     private Long currentMockUserId() {
