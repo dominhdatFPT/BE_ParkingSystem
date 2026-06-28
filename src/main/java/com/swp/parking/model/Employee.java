@@ -1,10 +1,7 @@
 package com.swp.parking.model;
 
-import com.swp.parking.model.enums.UserRole;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
-import jakarta.persistence.EnumType;
-import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
@@ -16,43 +13,45 @@ import lombok.NoArgsConstructor;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "users")
+@Table(name = "employees")
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class User {
+public class Employee {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "user_id")
+    @Column(name = "employee_id")
     private Long id;
 
-    @Column(name = "full_name", nullable = false)
-    private String fullName;
+    @Column(name = "user_id", nullable = false)
+    private Long userId;
 
-    @Column(nullable = false, unique = true)
-    private String email;
+    @Column(name = "parking_id")
+    private Long parkingId;
 
-    @Column(name = "phone")
-    private String phone;
+    @Column(name = "manager_id")
+    private Long managerId;
 
-    @Column(name = "avatar_url", columnDefinition = "text")
-    private String avatarUrl;
+    @Column(name = "employee_code")
+    private String employeeCode;
+
+    @Column(name = "role", nullable = false)
+    private String role;
+
+    @Column(name = "admin_code")
+    private String adminCode;
+
+    @Column(name = "salary")
+    private BigDecimal salary;
 
     @Column(name = "status")
     private String status;
-
-    @Column(name = "password_hash", nullable = false)
-    private String password;
-
-    @Enumerated(EnumType.STRING)
-    @Column(name = "role", nullable = false)
-    @Builder.Default
-    private UserRole role = UserRole.USER;
 
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
