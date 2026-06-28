@@ -119,6 +119,7 @@ public class VNPayController {
     /**
      * VNPay redirect browser user về đây sau khi hoàn tất thanh toán.
      * BE xác thực chữ ký rồi chuyển hướng FE kèm kết quả.
+     * Fallback: nếu IPN chưa xử lý (status PENDING), tự xử lý luôn tại đây.
      */
     @GetMapping("/return")
     public void handleReturn(HttpServletRequest request, HttpServletResponse response)
@@ -131,6 +132,35 @@ public class VNPayController {
         log.info("[VNPay Return] txnRef={}, responseCode={}", txnRef, responseCode);
 
         boolean success = vnPayService.verifyReturn(params);
+
+        // Fallback: nếu IPN chưa cập nhật DB (status vẫn PENDING) và chữ ký hợp lệ
+        // → xử lý như IPN để tránh trường hợp IPN bị miss (timeout, server sleep, v.v.)
+        if (success) {
+            try {
+                VNPayOrder order = vnPayService.getOrder(txnRef);
+                if (VNPayOrderStatus.PENDING.equals(order.getStatus())) {
+                    log.info("[VNPay Return] IPN chưa xử lý đơn {} – fallback xử lý tại Return URL", txnRef);
+                    boolean processed = vnPayService.processIpn(params);
+                    if (processed) {
+                        order = vnPayService.getOrder(txnRef);
+                        if (VNPayOrderStatus.PAID.equals(order.getStatus())
+                                && order.getSubscriptionId() != null) {
+                            try {
+                                subscriptionService.activateSubscriptionVnpay(
+                                        order.getSubscriptionId(),
+                                        order.getVnpTransactionNo());
+                                log.info("[VNPay Return] Fallback – Subscription {} đã ACTIVE", order.getSubscriptionId());
+                            } catch (Exception e) {
+                                log.error("[VNPay Return] Fallback – Lỗi kích hoạt subscription {}: {}",
+                                        order.getSubscriptionId(), e.getMessage());
+                            }
+                        }
+                    }
+                }
+            } catch (Exception e) {
+                log.warn("[VNPay Return] Fallback xử lý IPN thất bại cho txnRef={}: {}", txnRef, e.getMessage());
+            }
+        }
 
         // Lấy subscriptionId từ đơn hàng (nếu có) để FE có thể cập nhật UI
         String subscriptionId = "";

@@ -63,4 +63,10 @@ public class AuthController {
         authService.resetPassword(request);
         return ResponseEntity.ok(Map.of("message", "Đặt lại mật khẩu thành công"));
     }
+
+    @PostMapping("/refresh-token")
+    public ResponseEntity<Map<String, String>> refreshToken(@RequestBody Map<String, String> body) {
+        String newAccessToken = authService.generateNewAccessToken(body.get("refreshToken"));
+        return ResponseEntity.ok(Map.of("accessToken", newAccessToken));
+    }
 }
