@@ -36,7 +36,27 @@ public class StaffOperationsController {
     }
 
     @GetMapping("/parking-sessions")
-    public ResponseEntity<List<OperationsDashboardResponse.VehicleActivity>> getParkingSessions() {
-        return ResponseEntity.ok(operationsDashboardService.getParkingSessions());
+    public ResponseEntity<List<OperationsDashboardResponse.VehicleActivity>> getParkingSessions(
+            @RequestParam(required = false) String search,
+            @RequestParam(required = false) String tab,
+            @RequestParam(required = false) String vehicleType,
+            @RequestParam(required = false) String customerType,
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
+            LocalDate date,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "100") int size
+    ) {
+        return ResponseEntity.ok(operationsDashboardService.getParkingSessions(
+                search,
+                tab,
+                vehicleType,
+                customerType,
+                status,
+                date,
+                page,
+                size
+        ));
     }
 }

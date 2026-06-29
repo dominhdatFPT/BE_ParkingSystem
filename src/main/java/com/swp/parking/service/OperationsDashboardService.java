@@ -3,6 +3,7 @@ package com.swp.parking.service;
 import com.swp.parking.dto.response.OperationsDashboardResponse;
 import com.swp.parking.dto.response.ParkingOperationsResponse;
 import com.swp.parking.model.enums.ParkingSlotStatus;
+import lombok.Builder;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataAccessException;
@@ -18,6 +19,7 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 @Service
@@ -184,8 +186,26 @@ public class OperationsDashboardService {
         }
     }
 
-    public List<OperationsDashboardResponse.VehicleActivity> getParkingSessions() {
-        return readVehicleActivities(null);
+    public List<OperationsDashboardResponse.VehicleActivity> getParkingSessions(
+            String search,
+            String tab,
+            String vehicleType,
+            String customerType,
+            String status,
+            LocalDate date,
+            int page,
+            int size
+    ) {
+        return readVehicleActivities(ParkingSessionQuery.builder()
+                .search(search)
+                .tab(tab)
+                .vehicleType(vehicleType)
+                .customerType(customerType)
+                .status(status)
+                .date(date)
+                .page(page)
+                .size(size)
+                .build());
     }
 
     private List<ParkingOperationsResponse.Slot> readOperationSlots() {
@@ -493,11 +513,20 @@ public class OperationsDashboardService {
     }
 
     private List<OperationsDashboardResponse.VehicleActivity> readRecentVehicleActivities() {
-        return readVehicleActivities(8);
+        return readVehicleActivities(ParkingSessionQuery.builder().size(8).build());
     }
 
-    private List<OperationsDashboardResponse.VehicleActivity> readVehicleActivities(Integer limit) {
-        String limitClause = limit == null ? "" : "LIMIT " + limit;
+    private List<OperationsDashboardResponse.VehicleActivity> readVehicleActivities(ParkingSessionQuery query) {
+        ParkingSessionQuery safeQuery = query.safe();
+        String vehicleTypeExpression = vehicleTypeExpression();
+        String customerTypeExpression = customerTypeExpression();
+        StringBuilder where = new StringBuilder();
+        List<Object> args = new ArrayList<>();
+
+        addParkingSessionFilters(where, args, safeQuery, vehicleTypeExpression, customerTypeExpression);
+        args.add(safeQuery.size());
+        args.add((long) safeQuery.page() * safeQuery.size());
+
         String sql = """
                 SELECT
                     po.order_id,
@@ -508,41 +537,104 @@ public class OperationsDashboardService {
                     po.parking_status,
                     po.calculated_fee,
                     po.updated_at,
-                    %s AS vehicle_type,
-                    CASE
-                        WHEN COALESCE(po.notes, '') LIKE 'ENTRY_TYPE=MONTHLY%%' THEN 'MONTHLY'
-                        ELSE 'VISITOR'
-                    END AS customer_type,
-                    COALESCE(vc.card_code, substring(COALESCE(po.notes, '') from 'VISITOR_CARD=([^;]+)')) AS visitor_card_code,
-                    NULL AS parking_name,
-                    NULL AS floor_name
+                    %1$s AS vehicle_type,
+                    %2$s AS customer_type,
+                    COALESCE(vc_by_id.card_code, vc_by_order.card_code, substring(COALESCE(po.notes, '') from 'VISITOR_CARD=([^;]+)')) AS visitor_card_code,
+                    pf.parking_name,
+                    fl.floor_name
                 FROM parking_orders po
                 LEFT JOIN vehicles v ON v.vehicle_id = po.vehicle_id
-                LEFT JOIN vehicle_types vt ON vt.vehicle_type_id = v.vehicle_type_id
-                LEFT JOIN visitor_cards vc ON vc.current_order_id = po.order_id OR vc.visitor_card_id = po.card_id
+                LEFT JOIN vehicle_types vt ON vt.vehicle_type_id = COALESCE(po.vehicle_type_id, v.vehicle_type_id)
+                LEFT JOIN visitor_cards vc_by_id ON vc_by_id.visitor_card_id = COALESCE(po.visitor_card_id, po.card_id)
+                LEFT JOIN visitor_cards vc_by_order ON po.visitor_card_id IS NULL AND vc_by_order.current_order_id = po.order_id
+                LEFT JOIN parking_facilities pf ON pf.parking_id = po.parking_id
+                LEFT JOIN parking_floors fl ON fl.floor_id = po.floor_id
+                %3$s
                 ORDER BY po.updated_at DESC
-                %s
-                """.formatted(vehicleTypeExpression(), limitClause);
+                LIMIT ? OFFSET ?
+                """.formatted(
+                vehicleTypeExpression,
+                customerTypeExpression,
+                where
+        );
         try {
-            return jdbcTemplate.query(sql, (rs, rowNum) -> OperationsDashboardResponse.VehicleActivity.builder()
-                    .id(getLong(rs, "order_id"))
-                    .orderCode(rs.getString("order_code"))
-                    .licensePlate(rs.getString("license_plate"))
-                    .parkingName(rs.getString("parking_name"))
-                    .floorName(rs.getString("floor_name"))
-                    .vehicleType(rs.getString("vehicle_type"))
-                    .customerType(rs.getString("customer_type"))
-                    .visitorCardCode(rs.getString("visitor_card_code"))
-                    .status(rs.getString("parking_status"))
-                    .entryTime(getLocalDateTime(rs, "entry_time"))
-                    .exitTime(getLocalDateTime(rs, "exit_time"))
-                    .calculatedFee(rs.getBigDecimal("calculated_fee"))
-                    .updatedAt(getLocalDateTime(rs, "updated_at"))
-                    .build());
+            return jdbcTemplate.query(sql, this::mapVehicleActivity, args.toArray());
         } catch (DataAccessException ex) {
-            log.warn("Could not read recent vehicle activities: {}", ex.getMessage());
+            log.warn("Could not read parking sessions: {}", ex.getMessage());
             return List.of();
         }
+    }
+
+    private void addParkingSessionFilters(
+            StringBuilder where,
+            List<Object> args,
+            ParkingSessionQuery query,
+            String vehicleTypeExpression,
+            String customerTypeExpression
+    ) {
+        List<String> clauses = new ArrayList<>();
+        String search = normalizeFilter(query.search());
+        if (!search.isBlank()) {
+            clauses.add("upper(po.license_plate) LIKE ?");
+            args.add("%" + search + "%");
+        }
+
+        String tab = normalizeFilter(query.tab());
+        if ("ACTIVE".equals(tab)) {
+            clauses.add(activeParkingOrderCondition());
+        } else if ("COMPLETED".equals(tab)) {
+            clauses.add(completedParkingOrderCondition());
+        }
+
+        String vehicleType = normalizeFilter(query.vehicleType());
+        if ("CAR".equals(vehicleType) || "MOTORBIKE".equals(vehicleType)) {
+            clauses.add(vehicleTypeExpression + " = ?");
+            args.add(vehicleType);
+        }
+
+        String customerType = normalizeFilter(query.customerType());
+        if ("MONTHLY".equals(customerType) || "VISITOR".equals(customerType)) {
+            clauses.add(customerTypeExpression + " = ?");
+            args.add(customerType);
+        }
+
+        String status = normalizeFilter(query.status());
+        switch (status) {
+            case "COMPLETED" -> clauses.add(completedParkingOrderCondition());
+            case "NORMAL" -> clauses.add(activeParkingOrderCondition() + " AND po.entry_time > now() - interval '24 hours'");
+            case "OVER_24_HOURS" -> clauses.add(activeParkingOrderCondition() + " AND po.entry_time <= now() - interval '24 hours' AND po.entry_time > now() - interval '7 days'");
+            case "OVER_7_DAYS" -> clauses.add(activeParkingOrderCondition() + " AND po.entry_time <= now() - interval '7 days'");
+            default -> {
+            }
+        }
+
+        if (query.date() != null) {
+            clauses.add("po.entry_time >= ? AND po.entry_time < ?");
+            args.add(query.date());
+            args.add(query.date().plusDays(1));
+        }
+
+        if (!clauses.isEmpty()) {
+            where.append("WHERE ").append(String.join(" AND ", clauses));
+        }
+    }
+
+    private OperationsDashboardResponse.VehicleActivity mapVehicleActivity(ResultSet rs, int rowNum) throws SQLException {
+        return OperationsDashboardResponse.VehicleActivity.builder()
+                .id(getLong(rs, "order_id"))
+                .orderCode(rs.getString("order_code"))
+                .licensePlate(rs.getString("license_plate"))
+                .parkingName(rs.getString("parking_name"))
+                .floorName(rs.getString("floor_name"))
+                .vehicleType(rs.getString("vehicle_type"))
+                .customerType(rs.getString("customer_type"))
+                .visitorCardCode(rs.getString("visitor_card_code"))
+                .status(rs.getString("parking_status"))
+                .entryTime(getLocalDateTime(rs, "entry_time"))
+                .exitTime(getLocalDateTime(rs, "exit_time"))
+                .calculatedFee(rs.getBigDecimal("calculated_fee"))
+                .updatedAt(getLocalDateTime(rs, "updated_at"))
+                .build();
     }
 
     private long queryLong(String sql) {
@@ -575,6 +667,30 @@ public class OperationsDashboardService {
                     ELSE 'CAR'
                 END
                 """;
+    }
+
+    private String customerTypeExpression() {
+        return """
+                CASE
+                    WHEN upper(COALESCE(po.entry_type, '')) IN ('MONTHLY', 'SUBSCRIPTION')
+                      OR po.subscription_id IS NOT NULL
+                      OR upper(COALESCE(po.notes, '')) LIKE 'ENTRY_TYPE=MONTHLY%%'
+                    THEN 'MONTHLY'
+                    ELSE 'VISITOR'
+                END
+                """;
+    }
+
+    private String activeParkingOrderCondition() {
+        return "(po.parking_status = 'ACTIVE' OR (po.entry_time IS NOT NULL AND po.exit_time IS NULL))";
+    }
+
+    private String completedParkingOrderCondition() {
+        return "(po.parking_status = 'COMPLETED' OR po.exit_time IS NOT NULL)";
+    }
+
+    private String normalizeFilter(String value) {
+        return value == null ? "" : value.trim().toUpperCase(Locale.ROOT);
     }
 
     private ParkingSlotStatus parseSlotStatus(String status) {
@@ -628,6 +744,24 @@ public class OperationsDashboardService {
             this.facilityName = facilityName;
             this.floorNumber = floorNumber;
             this.areaKey = areaKey;
+        }
+    }
+
+    @Builder
+    private record ParkingSessionQuery(
+            String search,
+            String tab,
+            String vehicleType,
+            String customerType,
+            String status,
+            LocalDate date,
+            int page,
+            int size
+    ) {
+        private ParkingSessionQuery safe() {
+            int safePage = Math.max(page, 0);
+            int safeSize = size <= 0 ? 100 : Math.min(size, 200);
+            return new ParkingSessionQuery(search, tab, vehicleType, customerType, status, date, safePage, safeSize);
         }
     }
 
