@@ -1,5 +1,6 @@
 package com.swp.parking.dto.response;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.swp.parking.model.enums.UserRole;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -18,4 +19,7 @@ public class AuthResponse {
     private String fullName;
     private String email;
     private UserRole role;
+
+    @JsonIgnore
+    private String refreshToken;
 }

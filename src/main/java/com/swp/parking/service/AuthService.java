@@ -14,6 +14,7 @@ import com.swp.parking.dto.response.AuthResponse;
 import com.swp.parking.exception.AppException;
 import com.swp.parking.model.Customer;
 import com.swp.parking.model.PasswordResetToken;
+import com.swp.parking.model.RefreshToken;
 import com.swp.parking.model.User;
 import com.swp.parking.model.enums.UserRole;
 import com.swp.parking.repository.CustomerRepository;
@@ -42,6 +43,7 @@ public class AuthService {
     private final PasswordEncoder passwordEncoder;
     private final JwtConfig jwtConfig;
     private final EmailService emailService;
+    private final RefreshTokenService refreshTokenService;
 
     public AuthResponse login(LoginRequest request) {
         User user = userRepository.findByEmail(request.getEmail())
@@ -58,8 +60,13 @@ public class AuthService {
 
         user.setRole(resolveRole(user.getId()));
         String token = jwtConfig.generateToken(user.getId(), user.getRole().name());
+        String refreshToken = null;
 
-        return mapToAuthResponse(user, token);
+        if (request.isRememberMe()) {
+            refreshToken = refreshTokenService.createRefreshToken(user.getId()).getToken();
+        }
+
+        return mapToAuthResponse(user, token, refreshToken);
     }
 
     public AuthResponse register(RegisterRequest request) {
@@ -81,7 +88,7 @@ public class AuthService {
         // TODO: Gửi push notification chào mừng qua Firebase Admin SDK
         String token = jwtConfig.generateToken(user.getId(), user.getRole().name());
 
-        return mapToAuthResponse(user, token);
+        return mapToAuthResponse(user, token, null);
     }
 
     public AuthResponse googleLogin(GoogleLoginRequest request) {
@@ -109,7 +116,7 @@ public class AuthService {
         user.setRole(resolveRole(user.getId()));
 
         String token = jwtConfig.generateToken(user.getId(), user.getRole().name());
-        return mapToAuthResponse(user, token);
+        return mapToAuthResponse(user, token, null);
     }
 
     private User findOrCreateGoogleUser(String email, String fullName) {
@@ -188,7 +195,7 @@ public class AuthService {
         log.info("Đặt lại mật khẩu thành công cho email={}", user.getEmail());
     }
 
-    private AuthResponse mapToAuthResponse(User user, String token) {
+    private AuthResponse mapToAuthResponse(User user, String token, String refreshToken) {
         return AuthResponse.builder()
                 .token(token)
                 .tokenType("Bearer")
@@ -196,7 +203,24 @@ public class AuthService {
                 .fullName(user.getFullName())
                 .email(user.getEmail())
                 .role(user.getRole())
+                .refreshToken(refreshToken)
                 .build();
+    }
+
+    public AuthResponse refreshSession(String refreshTokenValue) {
+        RefreshToken refreshToken = refreshTokenService.findByToken(refreshTokenValue);
+        refreshTokenService.verifyExpiration(refreshToken);
+        User user = refreshToken.getUser();
+        user.setRole(resolveRole(user.getId()));
+
+        String token = jwtConfig.generateToken(user.getId(), user.getRole().name());
+        return mapToAuthResponse(user, token, null);
+    }
+
+    public void logout(String refreshTokenValue) {
+        if (refreshTokenValue != null && !refreshTokenValue.isBlank()) {
+            refreshTokenService.deleteByToken(refreshTokenValue);
+        }
     }
 
     private UserRole resolveRole(Long userId) {
