@@ -302,6 +302,10 @@ public class VehicleRegistrationService {
         return !normalizedPlate.isBlank() && normalizedDocument.contains(normalizedPlate);
     }
 
+    private boolean isGoogleVisionProvider() {
+        return "google-vision".equalsIgnoreCase(ekycProperties.getProvider());
+    }
+
     private String normalizeLicensePlate(String value) {
         return value == null ? "" : value.trim().toUpperCase(Locale.ROOT).replaceAll("\\s+", "");
     }
