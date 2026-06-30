@@ -189,6 +189,7 @@ public class VNPayController {
                 .status(order.getStatus().name())
                 .amount(order.getAmount())
                 .orderInfo(order.getOrderInfo())
+                .paymentUrl(order.getPaymentUrl())
                 .vnpTransactionNo(order.getVnpTransactionNo())
                 .vnpResponseCode(order.getVnpResponseCode())
                 .vnpBankCode(order.getVnpBankCode())

@@ -59,6 +59,16 @@ public class VehicleRegistrationController {
         return ResponseEntity.ok(ApiResponse.success(service.getMyRegistrations(getCurrentUserId())));
     }
 
+    @PostMapping("/users/{userId}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'STAFF')")
+    public ResponseEntity<ApiResponse<VehicleRegistrationResponse>> createRegistrationForUser(
+            @PathVariable Long userId,
+            @Valid @RequestBody VehicleRegistrationRequest body) {
+        VehicleRegistrationResponse result = service.createRegistrationForUser(userId, getCurrentUserId(), body);
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiResponse.success(result, "Tao ho so dang ky xe cho user thanh cong"));
+    }
+
     @GetMapping("/pending")
     @PreAuthorize("hasAnyRole('ADMIN', 'STAFF')")
     public ResponseEntity<ApiResponse<Page<VehicleRegistrationResponse>>> getPendingRegistrations(

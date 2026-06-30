@@ -5,6 +5,7 @@ import com.swp.parking.dto.ekyc.EkycCccdResult;
 import com.swp.parking.dto.ekyc.EkycLicenseResult;
 import com.swp.parking.dto.ekyc.EkycValidationResult;
 import com.swp.parking.dto.request.AdminReviewRequest;
+import com.swp.parking.dto.request.SubscriptionRegisterRequest;
 import com.swp.parking.dto.request.VehicleRegistrationRequest;
 import com.swp.parking.dto.response.VehicleRegistrationResponse;
 import com.swp.parking.exception.AlreadyDeletedException;
@@ -12,11 +13,13 @@ import com.swp.parking.exception.AppException;
 import com.swp.parking.exception.DuplicateLicensePlateException;
 import com.swp.parking.exception.NotFoundException;
 import com.swp.parking.model.Customer;
+import com.swp.parking.model.FeePackage;
 import com.swp.parking.model.User;
 import com.swp.parking.model.Vehicle;
 import com.swp.parking.model.VehicleRegistration;
 import com.swp.parking.model.VehicleType;
 import com.swp.parking.repository.CustomerRepository;
+import com.swp.parking.repository.FeePackageRepository;
 import com.swp.parking.repository.UserRepository;
 import com.swp.parking.repository.VehicleRegistrationRepository;
 import com.swp.parking.repository.VehicleRepository;
@@ -50,6 +53,8 @@ public class VehicleRegistrationService {
     private final CustomerRepository customerRepository;
     private final EkycService ekycService;
     private final EkycProperties ekycProperties;
+    private final FeePackageRepository feePackageRepository;
+    private final SubscriptionService subscriptionService;
 
     private LocalDate parseDate(String s) {
         if (s == null) return null;
@@ -133,6 +138,18 @@ public class VehicleRegistrationService {
         VehicleType vehicleType = vehicleTypeRepository.findById(request.getVehicleTypeId())
                 .orElseThrow(() -> new AppException(HttpStatus.NOT_FOUND, "Loại xe không tồn tại"));
 
+        FeePackage requestedFeePackage = null;
+        if (request.getRequestedFeePackageId() != null) {
+            requestedFeePackage = feePackageRepository.findById(request.getRequestedFeePackageId())
+                    .orElseThrow(() -> new AppException(HttpStatus.NOT_FOUND, "Goi phi khong ton tai"));
+            if (!requestedFeePackage.getVehicleType().getId().equals(vehicleType.getId())) {
+                throw new AppException(HttpStatus.BAD_REQUEST, "Goi phi khong phu hop voi loai xe");
+            }
+            if (!Boolean.TRUE.equals(requestedFeePackage.getIsActive())) {
+                throw new AppException(HttpStatus.BAD_REQUEST, "Goi phi hien khong kha dung");
+            }
+        }
+
         String submittedPlate = normalizeLicensePlate(request.getLicensePlate());
         if (submittedPlate.isBlank()) {
             throw new AppException(HttpStatus.BAD_REQUEST,
@@ -206,6 +223,7 @@ public class VehicleRegistrationService {
                 .licenseImage(request.getLicenseImage())
                 .vehicleDocumentImage(request.getVehicleDocumentImage())
                 .plateImage(request.getPlateImage())
+                .requestedFeePackage(requestedFeePackage)
                 .ekycCccdId(limit(cccd != null ? cccd.getId() : null, 255))
                 .ekycFullName(limit(cccd != null ? cccd.getFullName() : null, 255))
                 .ekycDateOfBirth(cccd != null ? parseDate(cccd.getDateOfBirth()) : null)
@@ -229,6 +247,20 @@ public class VehicleRegistrationService {
                 .build();
 
         return toResponse(registrationRepository.save(registration));
+    }
+
+    @Transactional
+    public VehicleRegistrationResponse createRegistrationForUser(
+            Long targetUserId,
+            Long operatorUserId,
+            VehicleRegistrationRequest request) {
+        log.info("Back-office user {} creating vehicle registration for userId: {}", operatorUserId, targetUserId);
+        User targetUser = userRepository.findById(targetUserId)
+                .orElseThrow(() -> new AppException(HttpStatus.NOT_FOUND, "User khong ton tai"));
+        if (targetUser.getRole() != null && !"USER".equals(targetUser.getRole().name())) {
+            throw new AppException(HttpStatus.BAD_REQUEST, "Chi co the dang ky xe cho tai khoan USER");
+        }
+        return createRegistration(targetUserId, request);
     }
 
     private EkycValidationResult requireValidDocument(String label, String image) {
@@ -431,6 +463,14 @@ public class VehicleRegistrationService {
                             .build()));
 
             reg.setVehicle(vehicle);
+
+            if (reg.getRequestedFeePackage() != null) {
+                SubscriptionRegisterRequest subscriptionRequest = new SubscriptionRegisterRequest();
+                subscriptionRequest.setVehicleId(vehicle.getId());
+                subscriptionRequest.setPlanId(reg.getRequestedFeePackage().getId());
+                subscriptionRequest.setAutoRenew(false);
+                subscriptionService.registerSubscription(reg.getUser().getId(), subscriptionRequest, "127.0.0.1");
+            }
         }
 
         reg.setStatus(dto.getStatus());

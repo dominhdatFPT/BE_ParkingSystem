@@ -16,6 +16,7 @@ public class VNPayOrderStatusResponse {
 
     private Long amount;
     private String orderInfo;
+    private String paymentUrl;
     private String vnpTransactionNo;
     private String vnpResponseCode;
     private String vnpBankCode;
