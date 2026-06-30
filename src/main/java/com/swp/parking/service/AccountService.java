@@ -1,22 +1,29 @@
 package com.swp.parking.service;
 
+import com.swp.parking.dto.request.CreateAccountRequest;
 import com.swp.parking.dto.response.AccountUserResponse;
+import com.swp.parking.exception.DuplicateEmailException;
 import com.swp.parking.exception.InvalidRoleException;
 import com.swp.parking.exception.NotFoundException;
+import com.swp.parking.model.Customer;
 import com.swp.parking.model.Employee;
 import com.swp.parking.model.User;
 import com.swp.parking.model.enums.UserRole;
 import com.swp.parking.repository.AccountUserRepository;
+import com.swp.parking.repository.CustomerRepository;
 import com.swp.parking.repository.EmployeeRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -32,21 +39,93 @@ public class AccountService {
 
     private final AccountUserRepository accountUserRepository;
     private final EmployeeRepository employeeRepository;
+    private final CustomerRepository customerRepository;
+    private final PasswordEncoder passwordEncoder;
 
     @Transactional(readOnly = true)
     public Page<AccountUserResponse> getUsers(String status, String keyword, Pageable pageable) {
         String statusFilter = normalizeFilter(status);
         String keywordFilter = normalizeFilter(keyword);
-        return accountUserRepository.searchAccountUsers(
+        Page<AccountUserResponse> page = accountUserRepository.searchAccountUsers(
                 UserRole.USER, statusFilter, keywordFilter, pageable);
+
+        if (page.hasContent()) {
+            enrichWithCardInfo(page.getContent());
+        }
+
+        return page;
+    }
+
+    private void enrichWithCardInfo(List<AccountUserResponse> users) {
+        List<Long> userIds = users.stream()
+                .map(AccountUserResponse::getUserId)
+                .toList();
+
+        Map<Long, AccountUserRepository.CardInfoProjection> cardInfoMap =
+                accountUserRepository.findCardInfoByUserIds(userIds)
+                        .stream()
+                        .collect(Collectors.toMap(
+                                AccountUserRepository.CardInfoProjection::getUserId,
+                                ci -> ci
+                        ));
+
+        for (AccountUserResponse user : users) {
+            AccountUserRepository.CardInfoProjection info = cardInfoMap.get(user.getUserId());
+            if (info != null) {
+                user.setCardStatus(info.getCardStatus());
+                user.setFeePackageName(info.getFeePackageName());
+                user.setLicensePlate(info.getLicensePlate());
+            } else {
+                user.setCardStatus("CHƯA ĐĂNG KÝ");
+            }
+        }
+    }
+
+    public AccountUserResponse createUser(CreateAccountRequest request) {
+        if (accountUserRepository.existsByEmail(request.getEmail())) {
+            throw new DuplicateEmailException("Email already exists: " + request.getEmail());
+        }
+
+        UserRole role;
+        try {
+            role = UserRole.valueOf(request.getRole().toUpperCase());
+        } catch (IllegalArgumentException e) {
+            throw new InvalidRoleException("Role không hợp lệ. Chỉ chấp nhận USER, STAFF hoặc ADMIN");
+        }
+
+        User user = User.builder()
+                .fullName(request.getFullName())
+                .email(request.getEmail())
+                .phone(request.getPhone())
+                .password(passwordEncoder.encode(request.getPassword()))
+                .role(role)
+                .status("ACTIVE")
+                .build();
+
+        user = accountUserRepository.save(user);
+        ensureCustomerProfile(user);
+
+        if (role == UserRole.STAFF || role == UserRole.ADMIN) {
+            String code = generateEmployeeCode(user.getId());
+            Employee emp = Employee.builder()
+                    .userId(user.getId())
+                    .role(role.name())
+                    .employeeCode(code)
+                    .status("ACTIVE")
+                    .build();
+            employeeRepository.save(emp);
+        }
+
+        return mapToAccountUserResponse(user);
     }
 
     @Transactional(readOnly = true)
-    public Page<AccountUserResponse> getStaffs(String role, String keyword, Pageable pageable) {
+    public Page<AccountUserResponse> getStaffs(String role, String status, String keyword, Pageable pageable) {
         UserRole roleFilter = parseRoleFilter(role);
+        String statusFilter = normalizeFilter(status);
         String keywordFilter = normalizeFilter(keyword);
         return accountUserRepository.searchAccountStaffs(
-                STAFF_ROLES, roleFilter, keywordFilter, pageable);
+                STAFF_ROLES, roleFilter, statusFilter, keywordFilter, pageable);
     }
 
     public void updateUserStatus(Long userId) {
@@ -106,6 +185,25 @@ public class AccountService {
                         employeeRepository.save(emp);
                     });
         }
+    }
+
+    private Customer ensureCustomerProfile(User user) {
+        return customerRepository.findByUser_Id(user.getId())
+                .orElseGet(() -> customerRepository.save(Customer.builder()
+                        .user(user)
+                        .build()));
+    }
+
+    private AccountUserResponse mapToAccountUserResponse(User user) {
+        return AccountUserResponse.builder()
+                .userId(user.getId())
+                .fullName(user.getFullName())
+                .email(user.getEmail())
+                .phone(user.getPhone())
+                .status(user.getStatus())
+                .role(user.getRole())
+                .createdAt(user.getCreatedAt())
+                .build();
     }
 
     private String generateEmployeeCode(Long userId) {
