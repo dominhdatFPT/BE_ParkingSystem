@@ -112,6 +112,12 @@ public class GlobalExceptionHandler {
         return handleAppException(ex);
     }
 
+    @ExceptionHandler(AccountDisabledException.class)
+    public ResponseEntity<Map<String, Object>> handleAccountDisabled(AccountDisabledException ex) {
+        log.warn("AccountDisabledException: {}", ex.getMessage());
+        return handleAppException(ex);
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<Map<String, Object>> handleGeneralException(Exception ex) {
         log.error("Unhandled exception: {}", ex.getMessage(), ex);

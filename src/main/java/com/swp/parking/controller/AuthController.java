@@ -73,7 +73,9 @@ public class AuthController {
     @PostMapping("/google-login")
     public ResponseEntity<AuthResponse> googleLogin(@Valid @RequestBody GoogleLoginRequest request) {
         AuthResponse response = authService.googleLogin(request);
-        return ResponseEntity.ok(response);
+        return ResponseEntity.ok()
+                .header(HttpHeaders.SET_COOKIE, clearRefreshCookie().toString())
+                .body(response);
     }
 
     // ── Quên mật khẩu ────────────────────────────────────────────────

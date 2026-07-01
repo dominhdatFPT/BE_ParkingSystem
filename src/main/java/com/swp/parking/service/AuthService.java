@@ -11,6 +11,7 @@ import com.swp.parking.dto.request.RegisterRequest;
 import com.swp.parking.dto.request.ResetPasswordRequest;
 import com.swp.parking.dto.request.VerifyOtpRequest;
 import com.swp.parking.dto.response.AuthResponse;
+import com.swp.parking.exception.AccountDisabledException;
 import com.swp.parking.exception.AppException;
 import com.swp.parking.model.Customer;
 import com.swp.parking.model.PasswordResetToken;
@@ -56,6 +57,10 @@ public class AuthService {
 
         if (!passwordEncoder.matches(request.getPassword(), user.getPassword())) {
             throw new AppException(HttpStatus.BAD_REQUEST, "Invalid password");
+        }
+
+        if ("INACTIVE".equals(user.getStatus())) {
+            throw new AccountDisabledException("Tài khoản của bạn đã bị vô hiệu hóa. Vui lòng liên hệ quản trị viên.");
         }
 
         user.setRole(resolveRole(user.getId()));
@@ -113,6 +118,11 @@ public class AuthService {
         }
 
         User user = findOrCreateGoogleUser(email, decodedToken.getName());
+
+        if ("INACTIVE".equals(user.getStatus())) {
+            throw new AccountDisabledException("Tài khoản của bạn đã bị vô hiệu hóa. Vui lòng liên hệ quản trị viên.");
+        }
+
         user.setRole(resolveRole(user.getId()));
 
         String token = jwtConfig.generateToken(user.getId(), user.getRole().name());
@@ -211,6 +221,11 @@ public class AuthService {
         RefreshToken refreshToken = refreshTokenService.findByToken(refreshTokenValue);
         refreshTokenService.verifyExpiration(refreshToken);
         User user = refreshToken.getUser();
+
+        if ("INACTIVE".equals(user.getStatus())) {
+            throw new AccountDisabledException("Tài khoản của bạn đã bị vô hiệu hóa. Vui lòng liên hệ quản trị viên.");
+        }
+
         user.setRole(resolveRole(user.getId()));
 
         String token = jwtConfig.generateToken(user.getId(), user.getRole().name());
