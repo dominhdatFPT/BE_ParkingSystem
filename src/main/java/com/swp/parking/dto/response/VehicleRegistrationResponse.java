@@ -31,6 +31,16 @@ public class VehicleRegistrationResponse {
 
     private String requestedFeePackageName;
 
+    private Long vehicleId;
+
+    private Long subscriptionId;
+
+    private String subscriptionStatus;
+
+    private String paymentStatus;
+
+    private String paymentStatusLabel;
+
     private String registrationSource;
 
     private String brand;

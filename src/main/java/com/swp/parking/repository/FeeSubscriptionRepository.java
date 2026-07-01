@@ -18,6 +18,8 @@ public interface FeeSubscriptionRepository extends JpaRepository<FeeSubscription
 
     Optional<FeeSubscription> findByVehicle_IdAndStatus(Long vehicleId, SubscriptionStatus status);
 
+    Optional<FeeSubscription> findFirstByVehicle_IdOrderByCreatedAtDesc(Long vehicleId);
+
     List<FeeSubscription> findAllByVehicle_IdAndStatus(Long vehicleId, SubscriptionStatus status);
 
     @Query("""

@@ -14,12 +14,15 @@ import com.swp.parking.exception.DuplicateLicensePlateException;
 import com.swp.parking.exception.NotFoundException;
 import com.swp.parking.model.Customer;
 import com.swp.parking.model.FeePackage;
+import com.swp.parking.model.FeeSubscription;
 import com.swp.parking.model.User;
 import com.swp.parking.model.Vehicle;
 import com.swp.parking.model.VehicleRegistration;
 import com.swp.parking.model.VehicleType;
+import com.swp.parking.model.enums.SubscriptionStatus;
 import com.swp.parking.repository.CustomerRepository;
 import com.swp.parking.repository.FeePackageRepository;
+import com.swp.parking.repository.FeeSubscriptionRepository;
 import com.swp.parking.repository.UserRepository;
 import com.swp.parking.repository.VehicleRegistrationRepository;
 import com.swp.parking.repository.VehicleRepository;
@@ -54,6 +57,7 @@ public class VehicleRegistrationService {
     private final EkycService ekycService;
     private final EkycProperties ekycProperties;
     private final FeePackageRepository feePackageRepository;
+    private final FeeSubscriptionRepository feeSubscriptionRepository;
     private final SubscriptionService subscriptionService;
 
     private LocalDate parseDate(String s) {
@@ -66,6 +70,12 @@ public class VehicleRegistrationService {
     }
 
     private VehicleRegistrationResponse toResponse(VehicleRegistration reg) {
+        Long vehicleId = reg.getVehicle() != null ? reg.getVehicle().getId() : null;
+        Long requestedPackageId = reg.getRequestedFeePackage() != null
+                ? reg.getRequestedFeePackage().getId() : null;
+        FeeSubscription subscription = findLatestSubscription(vehicleId);
+        PaymentStatusInfo paymentStatus = resolvePaymentStatus(requestedPackageId, subscription);
+
         return VehicleRegistrationResponse.builder()
                 .registrationId(reg.getId())
                 .userId(reg.getUser().getId())
@@ -74,10 +84,15 @@ public class VehicleRegistrationService {
                 .vehicleTypeName(reg.getVehicleType().getTypeName())
                 .licensePlate(reg.getLicensePlate())
                 .contactPhone(reg.getContactPhone())
-                .requestedFeePackageId(reg.getRequestedFeePackage() != null
-                        ? reg.getRequestedFeePackage().getId() : null)
+                .requestedFeePackageId(requestedPackageId)
                 .requestedFeePackageName(reg.getRequestedFeePackage() != null
                         ? reg.getRequestedFeePackage().getName() : null)
+                .vehicleId(vehicleId)
+                .subscriptionId(subscription != null ? subscription.getId() : null)
+                .subscriptionStatus(subscription != null && subscription.getStatus() != null
+                        ? subscription.getStatus().name() : null)
+                .paymentStatus(paymentStatus.status())
+                .paymentStatusLabel(paymentStatus.label())
                 .registrationSource(reg.getRegistrationSource())
                 .brand(reg.getBrand())
                 .color(reg.getColor())
@@ -102,6 +117,9 @@ public class VehicleRegistrationService {
 
     private VehicleRegistrationResponse toSummaryResponse(
             VehicleRegistrationRepository.VehicleRegistrationSummary reg) {
+        FeeSubscription subscription = findLatestSubscription(reg.getVehicleId());
+        PaymentStatusInfo paymentStatus = resolvePaymentStatus(reg.getRequestedFeePackageId(), subscription);
+
         return VehicleRegistrationResponse.builder()
                 .registrationId(reg.getRegistrationId())
                 .userId(reg.getUserId())
@@ -112,6 +130,12 @@ public class VehicleRegistrationService {
                 .contactPhone(reg.getContactPhone())
                 .requestedFeePackageId(reg.getRequestedFeePackageId())
                 .requestedFeePackageName(reg.getRequestedFeePackageName())
+                .vehicleId(reg.getVehicleId())
+                .subscriptionId(subscription != null ? subscription.getId() : null)
+                .subscriptionStatus(subscription != null && subscription.getStatus() != null
+                        ? subscription.getStatus().name() : null)
+                .paymentStatus(paymentStatus.status())
+                .paymentStatusLabel(paymentStatus.label())
                 .registrationSource(reg.getRegistrationSource())
                 .brand(reg.getBrand())
                 .color(reg.getColor())
@@ -127,6 +151,28 @@ public class VehicleRegistrationService {
                 .createdAt(reg.getCreatedAt())
                 .reviewedAt(reg.getReviewedAt())
                 .build();
+    }
+
+    private FeeSubscription findLatestSubscription(Long vehicleId) {
+        if (vehicleId == null) {
+            return null;
+        }
+        return feeSubscriptionRepository.findFirstByVehicle_IdOrderByCreatedAtDesc(vehicleId)
+                .orElse(null);
+    }
+
+    private PaymentStatusInfo resolvePaymentStatus(Long requestedPackageId, FeeSubscription subscription) {
+        if (subscription != null && SubscriptionStatus.ACTIVE.equals(subscription.getStatus())) {
+            return new PaymentStatusInfo("PAID", "Đã thanh toán");
+        }
+        if (requestedPackageId != null
+                || (subscription != null && SubscriptionStatus.PENDING_PAYMENT.equals(subscription.getStatus()))) {
+            return new PaymentStatusInfo("UNPAID", "Chưa thanh toán");
+        }
+        return new PaymentStatusInfo("PACKAGE_NOT_REGISTERED", "Chưa đăng ký gói");
+    }
+
+    private record PaymentStatusInfo(String status, String label) {
     }
 
     @Transactional

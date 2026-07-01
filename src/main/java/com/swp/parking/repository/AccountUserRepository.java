@@ -61,13 +61,17 @@ public interface AccountUserRepository extends JpaRepository<User, Long> {
                 reg.license_plate AS licensePlate,
                 reg.fee_package_name AS feePackageName,
                 CASE
-                    WHEN reg.registration_id IS NULL THEN 'CHƯA ĐĂNG KÝ'
-                    WHEN sub.status IS NULL OR sub.status NOT IN ('ACTIVE', 'PAID') THEN 'CHƯA THANH TOÁN'
-                    ELSE 'ĐÃ THANH TOÁN'
+                    WHEN sub.status IN ('ACTIVE', 'PAID') THEN 'Đã thanh toán'
+                    WHEN reg.requested_fee_package_id IS NOT NULL OR sub.status = 'PENDING_PAYMENT' THEN 'Chưa thanh toán'
+                    ELSE 'Chưa đăng ký gói'
                 END AS cardStatus
             FROM users u
             LEFT JOIN LATERAL (
-                SELECT vr.registration_id, vr.license_plate, vr.vehicle_id, fp.name AS fee_package_name
+                SELECT vr.registration_id,
+                       vr.license_plate,
+                       vr.vehicle_id,
+                       vr.requested_fee_package_id,
+                       fp.name AS fee_package_name
                 FROM vehicle_registrations vr
                 LEFT JOIN fee_package fp ON vr.requested_fee_package_id = fp.fee_package_id
                 WHERE vr.user_id = u.user_id AND vr.is_deleted = false

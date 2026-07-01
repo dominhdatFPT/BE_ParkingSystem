@@ -76,7 +76,7 @@ public class AccountService {
                 user.setFeePackageName(info.getFeePackageName());
                 user.setLicensePlate(info.getLicensePlate());
             } else {
-                user.setCardStatus("CHƯA ĐĂNG KÝ");
+                user.setCardStatus("Chưa đăng ký gói");
             }
         }
     }

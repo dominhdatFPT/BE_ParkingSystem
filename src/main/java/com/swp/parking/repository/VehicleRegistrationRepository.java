@@ -37,6 +37,7 @@ public interface VehicleRegistrationRepository extends JpaRepository<VehicleRegi
                    r.contactPhone AS contactPhone,
                    fp.id AS requestedFeePackageId,
                    fp.name AS requestedFeePackageName,
+                   v.id AS vehicleId,
                    r.registrationSource AS registrationSource,
                    r.brand AS brand,
                    r.color AS color,
@@ -54,6 +55,7 @@ public interface VehicleRegistrationRepository extends JpaRepository<VehicleRegi
               FROM VehicleRegistration r
               JOIN r.user u
               JOIN r.vehicleType vt
+              LEFT JOIN r.vehicle v
               LEFT JOIN r.requestedFeePackage fp
              WHERE r.isDeleted = false
                AND (:status IS NULL OR r.status = :status)
@@ -71,6 +73,7 @@ public interface VehicleRegistrationRepository extends JpaRepository<VehicleRegi
                    r.contactPhone AS contactPhone,
                    fp.id AS requestedFeePackageId,
                    fp.name AS requestedFeePackageName,
+                   v.id AS vehicleId,
                    r.registrationSource AS registrationSource,
                    r.brand AS brand,
                    r.color AS color,
@@ -88,6 +91,7 @@ public interface VehicleRegistrationRepository extends JpaRepository<VehicleRegi
               FROM VehicleRegistration r
               JOIN r.user u
               JOIN r.vehicleType vt
+              LEFT JOIN r.vehicle v
               LEFT JOIN r.requestedFeePackage fp
              WHERE u.id = :userId AND r.isDeleted = false
              ORDER BY r.createdAt DESC
@@ -112,6 +116,7 @@ public interface VehicleRegistrationRepository extends JpaRepository<VehicleRegi
         String getContactPhone();
         Long getRequestedFeePackageId();
         String getRequestedFeePackageName();
+        Long getVehicleId();
         String getRegistrationSource();
         String getBrand();
         String getColor();
