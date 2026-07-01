@@ -42,6 +42,8 @@ app:
     expiration: ${APP_JWT_EXPIRATION:900000}
   refresh-token:
     expiration-ms: ${APP_REFRESH_TOKEN_EXPIRATION_MS:2592000000}
+  mail:
+    otp-send-timeout-ms: ${APP_MAIL_OTP_SEND_TIMEOUT_MS:10000}
   auth:
     refresh-cookie-name: ${APP_AUTH_REFRESH_COOKIE_NAME:refresh_token}
     refresh-cookie-path: ${APP_AUTH_REFRESH_COOKIE_PATH:/api/v1/auth}
