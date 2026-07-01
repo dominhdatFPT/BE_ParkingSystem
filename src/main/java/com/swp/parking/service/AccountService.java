@@ -96,7 +96,7 @@ public class AccountService {
         User user = User.builder()
                 .fullName(request.getFullName())
                 .email(request.getEmail())
-                .phone(request.getPhone())
+                .phone(normalizeOptional(request.getPhone()))
                 .password(passwordEncoder.encode(request.getPassword()))
                 .role(role)
                 .status("ACTIVE")
@@ -217,6 +217,14 @@ public class AccountService {
         }
         String trimmed = value.trim();
         return trimmed.isEmpty() ? null : trimmed.toUpperCase();
+    }
+
+    private String normalizeOptional(String value) {
+        if (value == null) {
+            return null;
+        }
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
     }
 
     private UserRole parseRoleFilter(String value) {
