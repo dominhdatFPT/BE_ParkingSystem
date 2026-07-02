@@ -322,7 +322,7 @@ public class VehicleRegistrationService {
                             .orElseThrow(() -> new AppException(HttpStatus.NOT_FOUND, "Khong tim thay dang ky vua tao"));
                 });
 
-        approveRegistration(registration, operator);
+        approveRegistration(registration, operator, Boolean.TRUE.equals(request.getFeePackagePaidCash()));
         return toResponse(registrationRepository.save(registration));
     }
 
@@ -527,7 +527,7 @@ public class VehicleRegistrationService {
                 .orElseThrow(() -> new AppException(HttpStatus.NOT_FOUND, "Admin không tồn tại"));
 
         if ("APPROVED".equals(dto.getStatus())) {
-            approveRegistration(reg, admin);
+            approveRegistration(reg, admin, false);
         }
 
         reg.setStatus(dto.getStatus());
@@ -538,7 +538,7 @@ public class VehicleRegistrationService {
         return toResponse(registrationRepository.save(reg));
     }
 
-    private void approveRegistration(VehicleRegistration reg, User reviewer) {
+    private void approveRegistration(VehicleRegistration reg, User reviewer, boolean feePackagePaidCash) {
         Customer customer = customerRepository.findByUser_Id(reg.getUser().getId())
                 .orElseGet(() -> customerRepository.save(Customer.builder()
                         .user(reg.getUser())
@@ -578,7 +578,11 @@ public class VehicleRegistrationService {
             subscriptionRequest.setVehicleId(vehicle.getId());
             subscriptionRequest.setPlanId(reg.getRequestedFeePackage().getId());
             subscriptionRequest.setAutoRenew(false);
-            subscriptionService.registerSubscription(reg.getUser().getId(), subscriptionRequest, "127.0.0.1");
+            if (feePackagePaidCash) {
+                subscriptionService.registerSubscriptionPaidCash(reg.getUser().getId(), subscriptionRequest);
+            } else {
+                subscriptionService.registerSubscription(reg.getUser().getId(), subscriptionRequest, "127.0.0.1");
+            }
         }
     }
 

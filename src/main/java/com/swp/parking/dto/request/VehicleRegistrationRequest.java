@@ -17,6 +17,8 @@ public class VehicleRegistrationRequest {
 
     private Long requestedFeePackageId;
 
+    private Boolean feePackagePaidCash;
+
     private String licensePlate;
 
     private String brand;

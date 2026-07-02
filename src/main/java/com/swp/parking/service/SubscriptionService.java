@@ -196,6 +196,72 @@ public class SubscriptionService {
      * @param transactionNo Mã giao dịch VNPay (vnp_TransactionNo)
      */
     @Transactional
+    public RegisterSubscriptionResponse registerSubscriptionPaidCash(Long userId,
+                                                                    SubscriptionRegisterRequest request) {
+        if (!vehicleRepository.existsByIdAndCustomer_User_Id(request.getVehicleId(), userId)) {
+            throw new AppException(HttpStatus.FORBIDDEN, "Phuong tien khong thuoc ve tai khoan cua ban");
+        }
+        Vehicle vehicle = vehicleRepository.findById(request.getVehicleId())
+                .orElseThrow(() -> new ResourceNotFoundException("Khong tim thay phuong tien"));
+
+        List<FeeSubscription> pendingList = subscriptionRepository
+                .findAllByVehicle_IdAndStatus(request.getVehicleId(), SubscriptionStatus.PENDING_PAYMENT);
+        pendingList.forEach(pending -> {
+            pending.setStatus(SubscriptionStatus.CANCELLED);
+            subscriptionRepository.save(pending);
+            log.info("Auto-cancelled pending subscription {} before cash-paid subscription", pending.getId());
+        });
+
+        subscriptionRepository.findByVehicle_IdAndStatus(request.getVehicleId(), SubscriptionStatus.ACTIVE)
+                .ifPresent(existing -> {
+                    throw new AppException(HttpStatus.CONFLICT,
+                            "Phuong tien da co the thang dang hoat dong, het han: " + existing.getEndDate());
+                });
+
+        FeePackage feePackage = packageRepository.findById(request.getPlanId())
+                .orElseThrow(() -> new ResourceNotFoundException("Goi dang ky khong ton tai"));
+        if (!Boolean.TRUE.equals(feePackage.getIsActive())) {
+            throw new AppException(HttpStatus.BAD_REQUEST, "Goi dang ky nay hien khong kha dung");
+        }
+
+        FeePackagePriceHistory priceHistory = priceHistoryRepository
+                .findFirstByFeePackage_IdAndEffectiveToIsNullOrderByEffectiveFromDesc(feePackage.getId())
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Khong tim thay gia hien hanh cho goi: " + feePackage.getId()));
+
+        LocalDateTime now = LocalDateTime.now();
+        FeeSubscription subscription = FeeSubscription.builder()
+                .vehicle(vehicle)
+                .feePackage(feePackage)
+                .priceHistory(priceHistory)
+                .amountToPay(priceHistory.getPrice())
+                .isAutoRenew(request.isAutoRenew())
+                .status(SubscriptionStatus.ACTIVE)
+                .startDate(now)
+                .endDate(now.plusMonths(feePackage.getDurationMonths()))
+                .build();
+        subscription = subscriptionRepository.save(subscription);
+
+        FeeSubscriptionInvoice invoice = FeeSubscriptionInvoice.builder()
+                .feeSubscription(subscription)
+                .amount(priceHistory.getPrice())
+                .status(InvoiceStatus.SUCCESS)
+                .type("INITIAL")
+                .message("Da thu tien mat tai quay")
+                .build();
+        invoice = invoiceRepository.save(invoice);
+
+        log.info("Subscription {} (goi: {}) -> ACTIVE by cash payment",
+                subscription.getId(), feePackage.getName());
+
+        return RegisterSubscriptionResponse.builder()
+                .subscriptionId(subscription.getId())
+                .invoiceId(invoice.getId())
+                .message("Goi da duoc kich hoat vi staff/admin da xac nhan thu tien mat.")
+                .build();
+    }
+
+    @Transactional
     public void activateSubscriptionVnpay(Long subscriptionId, String transactionNo) {
         FeeSubscription subscription = subscriptionRepository.findById(subscriptionId)
                 .orElseThrow(() -> new ResourceNotFoundException(
