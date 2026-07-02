@@ -418,7 +418,7 @@ public class VehicleRegistrationService {
     }
 
     private String normalizeLicensePlate(String value) {
-        return value == null ? "" : value.trim().toUpperCase(Locale.ROOT).replaceAll("\\s+", "");
+        return value == null ? "" : value.toUpperCase(Locale.ROOT).replaceAll("[^A-Z0-9]", "");
     }
 
     private String extractVehicleDocumentField(String text, String labelPattern) {
