@@ -237,8 +237,9 @@ public class VehicleRegistrationService {
                         "Họ tên trên CCCD và bằng lái xe không khớp");
             }
             if (!containsPlate(vehicleDocumentText, submittedPlate)) {
-                throw new AppException(HttpStatus.UNPROCESSABLE_ENTITY,
-                        "Biển số trên giấy đăng ký xe không khớp với biển số nhập");
+                log.warn("Vehicle document OCR did not confirm submitted plate {} for userId {}. "
+                                + "Keeping registration pending for staff manual review.",
+                        submittedPlate, userId);
             }
         } else {
             log.warn("eKYC validation đang TẮT (ekyc.validation-enabled=false) - bỏ qua đối chiếu "
