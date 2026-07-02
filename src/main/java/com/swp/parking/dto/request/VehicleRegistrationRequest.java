@@ -1,6 +1,5 @@
 package com.swp.parking.dto.request;
 
-import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -24,16 +23,12 @@ public class VehicleRegistrationRequest {
 
     private String color;
 
-    @NotBlank
     private String cccdFrontImage;
 
-    @NotBlank
     private String cccdBackImage;
 
-    @NotBlank
     private String licenseImage;
 
-    @NotBlank
     private String vehicleDocumentImage;
 
     private String plateImage;

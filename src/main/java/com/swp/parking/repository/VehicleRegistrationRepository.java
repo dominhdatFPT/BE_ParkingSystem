@@ -9,6 +9,7 @@ import org.springframework.data.repository.query.Param;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 
 public interface VehicleRegistrationRepository extends JpaRepository<VehicleRegistration, Long> {
 
@@ -18,6 +19,10 @@ public interface VehicleRegistrationRepository extends JpaRepository<VehicleRegi
     java.util.Optional<VehicleRegistration> findByIdAndNotDeleted(@Param("id") Long id);
 
     boolean existsByLicensePlateAndIsDeletedFalse(String licensePlate);
+
+    Optional<VehicleRegistration> findFirstByUser_IdAndLicensePlateAndIsDeletedFalseOrderByCreatedAtDesc(
+            Long userId,
+            String licensePlate);
 
     List<VehicleRegistration> findAllByUserIdAndIsDeletedFalse(Long userId);
 

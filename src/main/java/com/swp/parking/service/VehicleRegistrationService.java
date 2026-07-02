@@ -220,23 +220,19 @@ public class VehicleRegistrationService {
         EkycValidationResult validation = null;
         Double confidenceScore = null;
         if (ekycProperties.isValidationEnabled()) {
-            validation = requireValidDocument("CCCD mặt trước", request.getCccdFrontImage());
-            requireValidDocument("CCCD mặt sau", request.getCccdBackImage());
-            requireValidDocument("bằng lái xe", request.getLicenseImage());
-            requireValidDocument("giấy đăng ký xe", request.getVehicleDocumentImage());
+            validation = validateDocumentIfPresent("CCCD mặt trước", request.getCccdFrontImage());
+            validateDocumentIfPresent("CCCD mặt sau", request.getCccdBackImage());
+            validateDocumentIfPresent("bằng lái xe", request.getLicenseImage());
+            validateDocumentIfPresent("giấy đăng ký xe", request.getVehicleDocumentImage());
             confidenceScore = validation != null ? validation.getConfidenceScore() : null;
 
-            if (cccd == null || cccd.getFullName() == null || cccd.getFullName().isBlank()) {
-                throw new AppException(HttpStatus.UNPROCESSABLE_ENTITY, "Không đọc được họ tên trên CCCD");
-            }
-            if (license == null || license.getFullName() == null || license.getFullName().isBlank()) {
-                throw new AppException(HttpStatus.UNPROCESSABLE_ENTITY, "Không đọc được họ tên trên bằng lái xe");
-            }
-            if (!samePersonName(cccd.getFullName(), license.getFullName())) {
+            if (cccd != null && hasText(cccd.getFullName())
+                    && license != null && hasText(license.getFullName())
+                    && !samePersonName(cccd.getFullName(), license.getFullName())) {
                 throw new AppException(HttpStatus.UNPROCESSABLE_ENTITY,
                         "Họ tên trên CCCD và bằng lái xe không khớp");
             }
-            if (!containsPlate(vehicleDocumentText, submittedPlate)) {
+            if (hasText(vehicleDocumentText) && !containsPlate(vehicleDocumentText, submittedPlate)) {
                 log.warn("Vehicle document OCR did not confirm submitted plate {} for userId {}. "
                                 + "Keeping registration pending for staff manual review.",
                         submittedPlate, userId);
@@ -289,7 +285,7 @@ public class VehicleRegistrationService {
                 .ekycIsFake(validation != null ? validation.getIsFake() : null)
                 .ekycConfidenceScore(confidenceScore)
                 .ekycDocumentType(limit(validation != null ? validation.getDocumentType() : null, 255))
-                .registrationSource("VERIFIED_DOCUMENTS")
+                .registrationSource(hasAnyDocument(request) ? "VERIFIED_DOCUMENTS" : "FORM")
                 .status("PENDING")
                 .build();
 
@@ -307,7 +303,34 @@ public class VehicleRegistrationService {
         if (targetUser.getRole() != null && !"USER".equals(targetUser.getRole().name())) {
             throw new AppException(HttpStatus.BAD_REQUEST, "Chi co the dang ky xe cho tai khoan USER");
         }
-        return createRegistration(targetUserId, request);
+        User operator = userRepository.findById(operatorUserId)
+                .orElseThrow(() -> new AppException(HttpStatus.NOT_FOUND, "Nguoi thao tac khong ton tai"));
+
+        String submittedPlate = normalizeLicensePlate(request.getLicensePlate());
+        VehicleRegistration registration = registrationRepository
+                .findFirstByUser_IdAndLicensePlateAndIsDeletedFalseOrderByCreatedAtDesc(targetUserId, submittedPlate)
+                .map(existing -> {
+                    if (!existing.getVehicleType().getId().equals(request.getVehicleTypeId())) {
+                        throw new AppException(HttpStatus.CONFLICT,
+                                "Bien so nay da co ho so voi mot loai xe khac");
+                    }
+                    return existing;
+                })
+                .orElseGet(() -> {
+                    VehicleRegistrationResponse created = createRegistration(targetUserId, request);
+                    return registrationRepository.findByIdAndNotDeleted(created.getRegistrationId())
+                            .orElseThrow(() -> new AppException(HttpStatus.NOT_FOUND, "Khong tim thay dang ky vua tao"));
+                });
+
+        approveRegistration(registration, operator);
+        return toResponse(registrationRepository.save(registration));
+    }
+
+    private EkycValidationResult validateDocumentIfPresent(String label, String image) {
+        if (!hasText(image)) {
+            return null;
+        }
+        return requireValidDocument(label, image);
     }
 
     private EkycValidationResult requireValidDocument(String label, String image) {
@@ -325,6 +348,9 @@ public class VehicleRegistrationService {
     }
 
     private EkycCccdResult readCccdBestEffort(String image) {
+        if (!hasText(image)) {
+            return null;
+        }
         try {
             return ekycService.ocrCccd(image);
         } catch (AppException ex) {
@@ -337,6 +363,9 @@ public class VehicleRegistrationService {
     }
 
     private EkycLicenseResult readLicenseBestEffort(String image) {
+        if (!hasText(image)) {
+            return null;
+        }
         try {
             return ekycService.ocrLicense(image);
         } catch (AppException ex) {
@@ -349,6 +378,9 @@ public class VehicleRegistrationService {
     }
 
     private String readVehicleDocumentBestEffort(String image) {
+        if (!hasText(image)) {
+            return "";
+        }
         try {
             return ekycService.ocrVehicleDocument(image);
         } catch (AppException ex) {
@@ -402,6 +434,18 @@ public class VehicleRegistrationService {
     private String firstNonBlank(String first, String second) {
         if (first != null && !first.isBlank()) return first;
         return second == null || second.isBlank() ? null : second.trim();
+    }
+
+    private boolean hasText(String value) {
+        return value != null && !value.isBlank();
+    }
+
+    private boolean hasAnyDocument(VehicleRegistrationRequest request) {
+        return hasText(request.getCccdFrontImage())
+                || hasText(request.getCccdBackImage())
+                || hasText(request.getLicenseImage())
+                || hasText(request.getVehicleDocumentImage())
+                || hasText(request.getPlateImage());
     }
 
     private String limit(String value, int maxLength) {
@@ -483,41 +527,7 @@ public class VehicleRegistrationService {
                 .orElseThrow(() -> new AppException(HttpStatus.NOT_FOUND, "Admin không tồn tại"));
 
         if ("APPROVED".equals(dto.getStatus())) {
-            Customer customer = customerRepository.findByUser_Id(reg.getUser().getId())
-                    .orElseGet(() -> customerRepository.save(Customer.builder()
-                            .user(reg.getUser())
-                            .build()));
-
-            Vehicle vehicle = vehicleRepository.findByLicensePlate(reg.getLicensePlate())
-                    .map(existingVehicle -> {
-                        Long vehicleOwnerId = existingVehicle.getCustomer().getUser().getId();
-                        if (!vehicleOwnerId.equals(reg.getUser().getId())) {
-                            throw new AppException(HttpStatus.CONFLICT,
-                                    "Biển số đã thuộc một tài khoản khác");
-                        }
-                        if (!existingVehicle.getVehicleType().getId().equals(reg.getVehicleType().getId())) {
-                            throw new AppException(HttpStatus.CONFLICT,
-                                    "Biển số đã được đăng ký với một loại xe khác");
-                        }
-                        return existingVehicle;
-                    })
-                    .orElseGet(() -> vehicleRepository.save(Vehicle.builder()
-                            .customer(customer)
-                            .vehicleType(reg.getVehicleType())
-                            .licensePlate(reg.getLicensePlate())
-                            .brand(reg.getBrand())
-                            .color(reg.getColor())
-                            .build()));
-
-            reg.setVehicle(vehicle);
-
-            if (reg.getRequestedFeePackage() != null) {
-                SubscriptionRegisterRequest subscriptionRequest = new SubscriptionRegisterRequest();
-                subscriptionRequest.setVehicleId(vehicle.getId());
-                subscriptionRequest.setPlanId(reg.getRequestedFeePackage().getId());
-                subscriptionRequest.setAutoRenew(false);
-                subscriptionService.registerSubscription(reg.getUser().getId(), subscriptionRequest, "127.0.0.1");
-            }
+            approveRegistration(reg, admin);
         }
 
         reg.setStatus(dto.getStatus());
@@ -526,6 +536,50 @@ public class VehicleRegistrationService {
         reg.setReviewedAt(LocalDateTime.now());
 
         return toResponse(registrationRepository.save(reg));
+    }
+
+    private void approveRegistration(VehicleRegistration reg, User reviewer) {
+        Customer customer = customerRepository.findByUser_Id(reg.getUser().getId())
+                .orElseGet(() -> customerRepository.save(Customer.builder()
+                        .user(reg.getUser())
+                        .build()));
+
+        Vehicle vehicle = vehicleRepository.findByLicensePlate(reg.getLicensePlate())
+                .map(existingVehicle -> {
+                    Long vehicleOwnerId = existingVehicle.getCustomer().getUser().getId();
+                    if (!vehicleOwnerId.equals(reg.getUser().getId())) {
+                        throw new AppException(HttpStatus.CONFLICT,
+                                "Biển số đã thuộc một tài khoản khác");
+                    }
+                    if (!existingVehicle.getVehicleType().getId().equals(reg.getVehicleType().getId())) {
+                        throw new AppException(HttpStatus.CONFLICT,
+                                "Biển số đã được đăng ký với một loại xe khác");
+                    }
+                    existingVehicle.setBrand(firstNonBlank(reg.getBrand(), existingVehicle.getBrand()));
+                    existingVehicle.setColor(firstNonBlank(reg.getColor(), existingVehicle.getColor()));
+                    return existingVehicle;
+                })
+                .orElseGet(() -> vehicleRepository.save(Vehicle.builder()
+                        .customer(customer)
+                        .vehicleType(reg.getVehicleType())
+                        .licensePlate(reg.getLicensePlate())
+                        .brand(reg.getBrand())
+                        .color(reg.getColor())
+                        .build()));
+
+        reg.setVehicle(vehicle);
+        reg.setStatus("APPROVED");
+        reg.setRejectReason(null);
+        reg.setReviewedBy(reviewer);
+        reg.setReviewedAt(LocalDateTime.now());
+
+        if (reg.getRequestedFeePackage() != null) {
+            SubscriptionRegisterRequest subscriptionRequest = new SubscriptionRegisterRequest();
+            subscriptionRequest.setVehicleId(vehicle.getId());
+            subscriptionRequest.setPlanId(reg.getRequestedFeePackage().getId());
+            subscriptionRequest.setAutoRenew(false);
+            subscriptionService.registerSubscription(reg.getUser().getId(), subscriptionRequest, "127.0.0.1");
+        }
     }
 
     @Transactional
