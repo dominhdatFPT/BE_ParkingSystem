@@ -4,22 +4,17 @@ import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseAuthException;
 import com.google.firebase.auth.FirebaseToken;
 import com.swp.parking.config.JwtConfig;
-import com.swp.parking.dto.request.ForgotPasswordRequest;
 import com.swp.parking.dto.request.GoogleLoginRequest;
 import com.swp.parking.dto.request.LoginRequest;
 import com.swp.parking.dto.request.RegisterRequest;
-import com.swp.parking.dto.request.ResetPasswordRequest;
-import com.swp.parking.dto.request.VerifyOtpRequest;
 import com.swp.parking.dto.response.AuthResponse;
 import com.swp.parking.exception.AccountDisabledException;
 import com.swp.parking.exception.AppException;
 import com.swp.parking.model.Customer;
-import com.swp.parking.model.PasswordResetToken;
 import com.swp.parking.model.RefreshToken;
 import com.swp.parking.model.User;
 import com.swp.parking.model.enums.UserRole;
 import com.swp.parking.repository.CustomerRepository;
-import com.swp.parking.repository.PasswordResetTokenRepository;
 import com.swp.parking.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -28,9 +23,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDateTime;
 import java.util.UUID;
-import java.util.concurrent.ThreadLocalRandom;
 
 @Service
 @RequiredArgsConstructor
@@ -40,10 +33,8 @@ public class AuthService {
 
     private final UserRepository userRepository;
     private final CustomerRepository customerRepository;
-    private final PasswordResetTokenRepository passwordResetTokenRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtConfig jwtConfig;
-    private final EmailService emailService;
     private final RefreshTokenService refreshTokenService;
 
     public AuthResponse login(LoginRequest request) {
@@ -154,55 +145,6 @@ public class AuthService {
                 .orElseGet(() -> customerRepository.save(Customer.builder()
                         .user(user)
                         .build()));
-    }
-
-    // ── Quên mật khẩu ────────────────────────────────────────────────
-
-    public void requestPasswordReset(ForgotPasswordRequest request) {
-        User user = userRepository.findByEmail(request.getEmail())
-                .orElseThrow(() -> new AppException(HttpStatus.NOT_FOUND, "Email không tồn tại trong hệ thống"));
-
-        String otpCode = String.valueOf(ThreadLocalRandom.current().nextInt(100000, 1000000));
-        PasswordResetToken token = PasswordResetToken.builder()
-                .user(user)
-                .otpCode(otpCode)
-                .verified(false)
-                .used(false)
-                .createdAt(LocalDateTime.now())
-                .expiresAt(LocalDateTime.now().plusMinutes(5))
-                .build();
-
-        passwordResetTokenRepository.save(token);
-        emailService.sendOtpEmail(user.getEmail(), otpCode);
-        log.info("OTP quên mật khẩu đã gửi tới email={}", user.getEmail());
-    }
-
-    public void verifyPasswordResetOtp(VerifyOtpRequest request) {
-        PasswordResetToken token = passwordResetTokenRepository
-                .findByUser_EmailAndOtpCodeAndExpiresAtAfterAndUsedFalse(
-                        request.getEmail(), request.getOtp(), LocalDateTime.now())
-                .orElseThrow(() -> new AppException(HttpStatus.BAD_REQUEST, "OTP không đúng hoặc đã hết hạn"));
-
-        token.setVerified(true);
-        token.setExpiresAt(LocalDateTime.now().plusMinutes(10));
-        passwordResetTokenRepository.save(token);
-        log.info("Đã xác thực OTP quên mật khẩu cho email={}", request.getEmail());
-    }
-
-    public void resetPassword(ResetPasswordRequest request) {
-        PasswordResetToken token = passwordResetTokenRepository
-                .findByUser_EmailAndOtpCodeAndVerifiedTrueAndUsedFalseAndExpiresAtAfter(
-                        request.getEmail(), request.getOtp(), LocalDateTime.now())
-                .orElseThrow(() -> new AppException(HttpStatus.BAD_REQUEST,
-                        "Yêu cầu đặt lại mật khẩu không hợp lệ hoặc đã hết hạn"));
-
-        User user = token.getUser();
-        user.setPassword(passwordEncoder.encode(request.getNewPassword()));
-        userRepository.save(user);
-
-        token.setUsed(true);
-        passwordResetTokenRepository.save(token);
-        log.info("Đặt lại mật khẩu thành công cho email={}", user.getEmail());
     }
 
     private AuthResponse mapToAuthResponse(User user, String token, String refreshToken) {
