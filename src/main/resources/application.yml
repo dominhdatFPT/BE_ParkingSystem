@@ -6,17 +6,17 @@ spring:
   mail:
     host: ${MAIL_HOST:smtp.gmail.com}
     port: ${MAIL_PORT:587}
-    username: ${MAIL_USERNAME}
-    password: ${MAIL_PASSWORD}
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
     properties:
       mail:
         smtp:
           auth: ${MAIL_SMTP_AUTH:true}
           starttls:
             enable: ${MAIL_SMTP_STARTTLS_ENABLE:true}
-          connectiontimeout: ${MAIL_SMTP_CONNECTION_TIMEOUT:10000}
-          timeout: ${MAIL_SMTP_TIMEOUT:10000}
-          writetimeout: ${MAIL_SMTP_WRITE_TIMEOUT:10000}
+          connectiontimeout: ${MAIL_SMTP_CONNECTION_TIMEOUT:30000}
+          timeout: ${MAIL_SMTP_TIMEOUT:30000}
+          writetimeout: ${MAIL_SMTP_WRITE_TIMEOUT:30000}
   datasource:
     url: ${SPRING_DATASOURCE_URL}
     username: ${SPRING_DATASOURCE_USERNAME}
@@ -43,7 +43,7 @@ app:
   refresh-token:
     expiration-ms: ${APP_REFRESH_TOKEN_EXPIRATION_MS:2592000000}
   mail:
-    otp-send-timeout-ms: ${APP_MAIL_OTP_SEND_TIMEOUT_MS:10000}
+    otp-send-timeout-ms: ${APP_MAIL_OTP_SEND_TIMEOUT_MS:30000}
   auth:
     refresh-cookie-name: ${APP_AUTH_REFRESH_COOKIE_NAME:refresh_token}
     refresh-cookie-path: ${APP_AUTH_REFRESH_COOKIE_PATH:/api/v1/auth}
