@@ -16,6 +16,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
 import java.io.UnsupportedEncodingException;
+import java.net.ConnectException;
+import java.net.SocketTimeoutException;
+import java.net.UnknownHostException;
 
 @Slf4j
 @Service
@@ -46,11 +49,10 @@ public class EmailService {
             mailSender.send(message);
             log.info("OTP email sent to {}", toEmail);
         } catch (Exception e) {
-            Throwable cause = e.getCause() != null ? e.getCause() : e;
-            if (cause instanceof MailException
-                    || cause instanceof MessagingException
-                    || cause instanceof UnsupportedEncodingException) {
-                handleMailFailure(toEmail, cause);
+            if (e instanceof MailException
+                    || e instanceof MessagingException
+                    || e instanceof UnsupportedEncodingException) {
+                handleMailFailure(toEmail, e);
             }
             throw e instanceof RuntimeException runtimeException ? runtimeException : new AppException(
                     HttpStatus.INTERNAL_SERVER_ERROR,
@@ -79,12 +81,16 @@ public class EmailService {
         log.error("Failed to send OTP email to {}: {}", toEmail, rootCause.getMessage(), cause);
 
         if (cause instanceof MailAuthenticationException
-                || rootCause instanceof jakarta.mail.AuthenticationFailedException) {
+                || rootCause instanceof jakarta.mail.AuthenticationFailedException
+                || looksLikeAuthenticationFailure(rootCause)) {
             throw new AppException(HttpStatus.SERVICE_UNAVAILABLE,
                     "Máy chủ email chưa xác thực được. Vui lòng thử lại sau.");
         }
 
-        if (cause instanceof MailSendException) {
+        if (cause instanceof MailSendException
+                || rootCause instanceof ConnectException
+                || rootCause instanceof SocketTimeoutException
+                || rootCause instanceof UnknownHostException) {
             throw new AppException(HttpStatus.BAD_GATEWAY,
                     "Không thể kết nối máy chủ email. Vui lòng thử lại sau.");
         }
@@ -99,6 +105,18 @@ public class EmailService {
             current = current.getCause();
         }
         return current;
+    }
+
+    private boolean looksLikeAuthenticationFailure(Throwable throwable) {
+        String message = throwable.getMessage();
+        if (!StringUtils.hasText(message)) {
+            return false;
+        }
+        String normalized = message.toLowerCase();
+        return normalized.contains("authentication")
+                || normalized.contains("authenticate")
+                || normalized.contains("username and password")
+                || normalized.contains("bad credentials");
     }
 
     private String buildOtpEmailContent(String otp) {
