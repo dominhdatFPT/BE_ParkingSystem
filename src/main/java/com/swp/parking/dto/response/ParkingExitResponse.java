@@ -55,7 +55,10 @@ public class ParkingExitResponse {
         private String description;
         private Integer firstBlockMinutes;
         private BigDecimal firstBlockFee;
+        private Integer nextBlockMinutes;
+        private BigDecimal nextBlockFee;
         private Integer additionalBlocks;
         private BigDecimal additionalFee;
+        private BigDecimal dailyCap;
     }
 }
