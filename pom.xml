@@ -107,6 +107,13 @@
             <artifactId>spring-dotenv</artifactId>
             <version>4.0.0</version>
         </dependency>
+
+        <!-- Stripe Java SDK — xử lý thanh toán thẻ quốc tế -->
+        <dependency>
+            <groupId>com.stripe</groupId>
+            <artifactId>stripe-java</artifactId>
+            <version>26.3.0</version>
+        </dependency>
     </dependencies>
 
     <build>

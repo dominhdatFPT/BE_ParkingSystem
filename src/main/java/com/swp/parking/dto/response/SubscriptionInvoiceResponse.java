@@ -20,6 +20,9 @@ public class SubscriptionInvoiceResponse {
     private String momoOrderId;
     private Long momoTransId;
 
+    // ── Stripe ───────────────────────────────────────────────────────
+    private String stripePaymentIntentId;
+
     private BigDecimal amount;
 
     /** PENDING | SUCCESS | FAILED */

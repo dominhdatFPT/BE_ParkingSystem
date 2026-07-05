@@ -4,6 +4,7 @@ import com.swp.parking.dto.request.SubscriptionRegisterRequest;
 import com.swp.parking.dto.response.ApiResponse;
 import com.swp.parking.dto.response.MyVehicleResponse;
 import com.swp.parking.dto.response.RegisterSubscriptionResponse;
+import com.swp.parking.dto.response.RegisterSubscriptionStripeResponse;
 import com.swp.parking.dto.response.SubscriptionInvoiceResponse;
 import com.swp.parking.dto.response.SubscriptionResponse;
 import com.swp.parking.service.SubscriptionService;
@@ -59,6 +60,20 @@ public class SubscriptionController {
                 getCurrentUserId(), request, clientIp);
         return ResponseEntity.ok(ApiResponse.success(data,
                 "Đăng ký thẻ tháng thành công, vui lòng hoàn tất thanh toán qua VNPay"));
+    }
+
+    /**
+     * Đăng ký thẻ tháng qua Stripe.
+     * Flow: tạo subscription PENDING_PAYMENT → gọi Stripe → trả clientSecret để FE hiển thị form thẻ.
+     * Không cần clientIp (Stripe không yêu cầu).
+     */
+    @PostMapping("/register-stripe")
+    public ResponseEntity<ApiResponse<RegisterSubscriptionStripeResponse>> registerSubscriptionStripe(
+            @Valid @RequestBody SubscriptionRegisterRequest request) {
+        RegisterSubscriptionStripeResponse data = subscriptionService.registerSubscriptionStripe(
+                getCurrentUserId(), request);
+        return ResponseEntity.ok(ApiResponse.success(data,
+                "Đăng ký thẻ tháng thành công, vui lòng hoàn tất thanh toán qua Stripe"));
     }
 
     /**
