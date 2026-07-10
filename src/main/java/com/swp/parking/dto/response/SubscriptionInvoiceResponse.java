@@ -12,13 +12,12 @@ public class SubscriptionInvoiceResponse {
 
     private Long id;
 
-    // ── VNPay (kênh thanh toán hiện tại) ────────────────────────────
-    private String vnpTxnRef;
-    private String vnpTransactionNo;
-
     // ── MoMo (legacy — dữ liệu cũ) ──────────────────────────────────
     private String momoOrderId;
     private Long momoTransId;
+
+    // ── Stripe ───────────────────────────────────────────────────────
+    private String stripePaymentIntentId;
 
     private BigDecimal amount;
 

@@ -53,13 +53,13 @@ ekyc:
   license-plate-path: ${EKYC_LICENSE_PLATE_PATH:/v1/ocr/license-plate}
   validation-enabled: ${EKYC_VALIDATION_ENABLED:false}
 
-vnpay:
-  tmn-code: ${VNP_TMN_CODE}
-  hash-secret: ${VNP_HASH_SECRET}
-  pay-url: ${VNP_PAY_URL:https://sandbox.vnpayment.vn/paymentv2/vpcpay.html}
-  return-url: ${VNP_RETURN_URL:http://localhost:8080/api/payments/vnpay/return}
-  fe-result-url: ${VNP_FE_RESULT_URL:http://localhost:5173/subscription/result}
-  order-expire-minutes: ${VNP_ORDER_EXPIRE_MINUTES:15}
+stripe:
+  secret-key: ${STRIPE_SECRET_KEY}
+  webhook-secret: ${STRIPE_WEBHOOK_SECRET:whsec_placeholder}
+  # usd = Stripe nhận số VNĐ dưới dạng cents ($80 cho 8000VNĐ) — dùng cho test account ngoài VN
+  # vnd = Stripe nhận đúng VNĐ — dùng khi account được đăng ký tại Việt Nam với giá thực (>12.500đ)
+  currency: ${STRIPE_CURRENCY:usd}
+  order-expire-minutes: ${STRIPE_ORDER_EXPIRE_MINUTES:30}
 
 crypto:
   aes-secret-key: ${CRYPTO_AES_SECRET_KEY}

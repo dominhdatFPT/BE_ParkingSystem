@@ -581,7 +581,7 @@ public class VehicleRegistrationService {
             if (feePackagePaidCash) {
                 subscriptionService.registerSubscriptionPaidCash(reg.getUser().getId(), subscriptionRequest);
             } else {
-                subscriptionService.registerSubscription(reg.getUser().getId(), subscriptionRequest, "127.0.0.1");
+                subscriptionService.registerSubscriptionStripe(reg.getUser().getId(), subscriptionRequest);
             }
         }
     }

@@ -1,5 +1,6 @@
 package com.swp.parking.config;
 
+import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
@@ -46,14 +47,13 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .requestMatchers("/api/v1/auth/**").permitAll()
 
-                        // VNPay webhooks — phải public vì VNPay server gọi trực tiếp (không có JWT)
-                        .requestMatchers(HttpMethod.GET, "/api/payments/vnpay/ipn").permitAll()
-                        .requestMatchers(HttpMethod.GET, "/api/payments/vnpay/return").permitAll()
-                        // VNPay order status — FE polling sau redirect, có thể không còn session hợp lệ
-                        .requestMatchers(HttpMethod.GET, "/api/payments/vnpay/orders/*/status").permitAll()
-
-                        // Dev/test endpoints — mock VNPay (không active trên prod do @Profile)
-                        .requestMatchers("/api/dev/**").permitAll()
+                        // Stripe webhook — Stripe server gọi trực tiếp, không có JWT
+                        .requestMatchers(HttpMethod.POST, "/api/payments/stripe/webhook").permitAll()
+                        // Stripe order status — FE polling sau confirmCardPayment
+                        .requestMatchers(HttpMethod.GET, "/api/payments/stripe/orders/*/status").permitAll()
+                        // Stripe confirm — FE gọi ngay sau success để kích hoạt subscription (fallback webhook)
+                        .requestMatchers(HttpMethod.POST, "/api/payments/stripe/orders/*/confirm").permitAll()
+                        .requestMatchers("/api/v1/visitor-checkout/**").permitAll()
 
                         // Public read endpoints
                         .requestMatchers(HttpMethod.GET, "/api/v1/parking-area-summary/**").permitAll()
@@ -95,6 +95,17 @@ public class SecurityConfig {
                         .requestMatchers("/api/customer/**").authenticated()
 
                         .anyRequest().authenticated()
+                )
+                // Trả 401 (không phải 403) khi chưa đăng nhập / token hết hạn
+                // → FE mới có thể trigger refresh-token tự động
+                .exceptionHandling(ex -> ex
+                        .authenticationEntryPoint((request, response, authException) -> {
+                            response.setContentType("application/json;charset=UTF-8");
+                            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+                            response.getWriter().write(
+                                    "{\"status\":401,\"message\":\"Unauthorized – vui lòng đăng nhập lại\"}"
+                            );
+                        })
                 )
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
