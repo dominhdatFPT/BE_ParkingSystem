@@ -101,7 +101,7 @@ public class ParkingEntryService {
                 throw new AppException(HttpStatus.CONFLICT, "Xe nay dang co phien gui xe ACTIVE");
             }
 
-            Long orderId = insertParkingOrder(
+            ParkingOrderRef order = insertParkingOrder(
                     licensePlate,
                     vehicle.getVehicleId(),
                     vehicle.getVehicleTypeId(),
@@ -120,7 +120,8 @@ public class ParkingEntryService {
                     .customerName(vehicle.getCustomerName())
                     .vehicleBrand(vehicle.getBrand())
                     .vehicleColor(vehicle.getColor())
-                    .orderId(orderId)
+                    .orderId(order.getId())
+                    .orderCode(order.getCode())
                     .licensePlate(vehicle.getLicensePlate())
                     .vehicleType(displayVehicleType(firstNonBlank(vehicle.getVehicleType(), vehicleType)))
                     .monthlyPackageName(vehicle.getPackageName())
@@ -142,7 +143,7 @@ public class ParkingEntryService {
         Long vehicleTypeId = findVehicleTypeId(vehicleType)
                 .orElseThrow(() -> new AppException(HttpStatus.CONFLICT, "Chua cau hinh loai xe " + vehicleType));
 
-        Long orderId = insertParkingOrder(
+        ParkingOrderRef order = insertParkingOrder(
                 licensePlate,
                 null,
                 vehicleTypeId,
@@ -159,13 +160,14 @@ public class ParkingEntryService {
                     current_order_id = ?,
                     updated_at = now()
                 WHERE visitor_card_id = ?
-                """, orderId, visitorCard.getId());
+                """, order.getId(), visitorCard.getId());
 
         return ParkingEntryResponse.builder()
                 .entryType("VISITOR")
                 .registered(false)
                 .hasActiveSubscription(false)
-                .orderId(orderId)
+                .orderId(order.getId())
+                .orderCode(order.getCode())
                 .licensePlate(licensePlate)
                 .vehicleType(displayVehicleType(vehicleType))
                 .visitorCardCode(visitorCard.getCardCode())
@@ -337,7 +339,7 @@ public class ParkingEntryService {
         ).stream().findFirst();
     }
 
-    private Long insertParkingOrder(
+    private ParkingOrderRef insertParkingOrder(
             String licensePlate,
             Long vehicleId,
             Long vehicleTypeId,
@@ -400,14 +402,14 @@ public class ParkingEntryService {
 
         Number generatedId = keyHolder.getKey();
         if (generatedId != null) {
-            return generatedId.longValue();
+            return new ParkingOrderRef(generatedId.longValue(), orderCode);
         }
 
         List<Map<String, Object>> rows = jdbcTemplate.queryForList(
                 "SELECT order_id FROM parking_orders WHERE order_code = ?",
                 orderCode
         );
-        return ((Number) rows.get(0).get("order_id")).longValue();
+        return new ParkingOrderRef(((Number) rows.get(0).get("order_id")).longValue(), orderCode);
     }
 
     private void ensureOperationalTables() {
@@ -511,6 +513,14 @@ public class ParkingEntryService {
 
     private String safeNote(String value) {
         return value == null ? "" : value.replace(";", ",");
+    }
+
+    @Data
+    @Builder
+    @AllArgsConstructor
+    private static class ParkingOrderRef {
+        private Long id;
+        private String code;
     }
 
     @Data

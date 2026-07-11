@@ -50,7 +50,7 @@ public class ParkingExitService {
             throw new AppException(HttpStatus.BAD_REQUEST, "Vui long nhap ma phien gui xe");
         }
 
-        ParkingExitRow row = findActiveOrderByCode(normalizedCode, false)
+        ParkingExitRow row = findActiveOrderByLookup(normalizedCode, false)
                 .orElseThrow(() -> new AppException(
                         HttpStatus.NOT_FOUND,
                         "Khong tim thay phien gui xe dang hoat dong cho ma " + normalizedCode
@@ -168,6 +168,17 @@ public class ParkingExitService {
                    AND po.parking_status = 'ACTIVE'
                 """ + (forUpdate ? " FOR UPDATE OF po" : "");
         return queryOrder(sql, orderCode);
+    }
+
+    private Optional<ParkingExitRow> findActiveOrderByLookup(String value, boolean forUpdate) {
+        Optional<ParkingExitRow> byCode = findActiveOrderByCode(value, forUpdate);
+        if (byCode.isPresent()) {
+            return byCode;
+        }
+        if (value.matches("\\d+")) {
+            return findActiveOrderById(Long.valueOf(value), forUpdate);
+        }
+        return Optional.empty();
     }
 
     private String baseOrderQuery() {

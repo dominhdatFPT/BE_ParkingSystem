@@ -14,6 +14,8 @@ public interface StripeOrderRepository extends JpaRepository<StripeOrder, String
 
     Optional<StripeOrder> findByPaymentIntentId(String paymentIntentId);
 
+    Optional<StripeOrder> findFirstByInvoiceIdOrderByCreatedAtDesc(Long invoiceId);
+
     Optional<StripeOrder> findFirstByParkingOrderIdOrderByCreatedAtDesc(Long parkingOrderId);
 
     /** Lấy tất cả đơn PENDING đã hết hạn để cleanup */

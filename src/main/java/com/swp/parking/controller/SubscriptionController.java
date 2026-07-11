@@ -97,6 +97,15 @@ public class SubscriptionController {
         return ResponseEntity.ok(ApiResponse.success(data));
     }
 
+    @PostMapping("/invoices/{invoiceId}/stripe")
+    public ResponseEntity<ApiResponse<RegisterSubscriptionStripeResponse>> createInvoiceStripePayment(
+            @PathVariable Long invoiceId) {
+        RegisterSubscriptionStripeResponse data = subscriptionService.createInvoiceStripePayment(
+                getCurrentUserId(), invoiceId);
+        return ResponseEntity.ok(ApiResponse.success(data,
+                "Da tao phien thanh toan Stripe cho hoa don"));
+    }
+
     private Long getCurrentUserId() {
         return (Long) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
     }

@@ -15,11 +15,13 @@ import com.swp.parking.model.FeeSubscriptionInvoice;
 import com.swp.parking.model.StripeOrder;
 import com.swp.parking.model.Vehicle;
 import com.swp.parking.model.enums.InvoiceStatus;
+import com.swp.parking.model.enums.StripeOrderStatus;
 import com.swp.parking.model.enums.SubscriptionStatus;
 import com.swp.parking.repository.FeePackagePriceHistoryRepository;
 import com.swp.parking.repository.FeePackageRepository;
 import com.swp.parking.repository.FeeSubscriptionInvoiceRepository;
 import com.swp.parking.repository.FeeSubscriptionRepository;
+import com.swp.parking.repository.StripeOrderRepository;
 import com.swp.parking.repository.VehicleRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -52,6 +54,7 @@ public class SubscriptionService {
     private final VehicleRepository vehicleRepository;
     private final CryptoService cryptoService;
     private final StripeService stripeService;
+    private final StripeOrderRepository stripeOrderRepository;
 
     // ─────────────────────────────────────────────────────────────────
     // 1. Danh sách xe của user
@@ -109,6 +112,7 @@ public class SubscriptionService {
         pendingList.forEach(pending -> {
             pending.setStatus(SubscriptionStatus.CANCELLED);
             subscriptionRepository.save(pending);
+            markPendingInvoicesFailed(pending.getId(), "Da huy do tao dang ky moi");
             log.info("Stripe: auto-cancelled pending subscription {} trước khi tạo mới", pending.getId());
         });
 
@@ -172,6 +176,48 @@ public class SubscriptionService {
                 .amount(amountLong)
                 .currency(stripeOrder.getCurrency())
                 .message("Nhập thông tin thẻ để hoàn tất thanh toán qua Stripe.")
+                .build();
+    }
+
+    @Transactional
+    public RegisterSubscriptionStripeResponse createInvoiceStripePayment(Long userId, Long invoiceId) {
+        FeeSubscriptionInvoice invoice = invoiceRepository.findById(invoiceId)
+                .orElseThrow(() -> new ResourceNotFoundException("Khong tim thay hoa don: " + invoiceId));
+        FeeSubscription subscription = invoice.getFeeSubscription();
+
+        if (!vehicleRepository.existsByIdAndCustomer_User_Id(subscription.getVehicle().getId(), userId)) {
+            throw new AppException(HttpStatus.FORBIDDEN, "Ban khong co quyen thanh toan hoa don nay");
+        }
+        if (!InvoiceStatus.PENDING.equals(invoice.getStatus())
+                || !SubscriptionStatus.PENDING_PAYMENT.equals(subscription.getStatus())) {
+            throw new AppException(HttpStatus.CONFLICT, "Hoa don khong con o trang thai cho thanh toan");
+        }
+
+        String description = subscription.getFeePackage().getName() + " - The thang bai do xe (Stripe)";
+        long amountLong = invoice.getAmount().longValue();
+
+        StripeOrder stripeOrder = stripeOrderRepository
+                .findFirstByInvoiceIdOrderByCreatedAtDesc(invoice.getId())
+                .filter(order -> StripeOrderStatus.PENDING.equals(order.getStatus())
+                        && order.getExpiredAt() != null
+                        && order.getExpiredAt().isAfter(LocalDateTime.now()))
+                .orElseGet(() -> stripeService.createPaymentIntent(
+                        userId, subscription.getId(), invoice.getId(), amountLong, description));
+
+        if (invoice.getStripePaymentIntentId() == null
+                || !invoice.getStripePaymentIntentId().equals(stripeOrder.getPaymentIntentId())) {
+            invoice.setStripePaymentIntentId(stripeOrder.getPaymentIntentId());
+            invoiceRepository.save(invoice);
+        }
+
+        return RegisterSubscriptionStripeResponse.builder()
+                .subscriptionId(subscription.getId())
+                .invoiceId(invoice.getId())
+                .paymentIntentId(stripeOrder.getPaymentIntentId())
+                .clientSecret(stripeOrder.getClientSecret())
+                .amount(stripeOrder.getAmount())
+                .currency(stripeOrder.getCurrency())
+                .message("Nhap thong tin the de hoan tat thanh toan qua Stripe.")
                 .build();
     }
 
@@ -245,6 +291,7 @@ public class SubscriptionService {
         pendingList.forEach(pending -> {
             pending.setStatus(SubscriptionStatus.CANCELLED);
             subscriptionRepository.save(pending);
+            markPendingInvoicesFailed(pending.getId(), "Da huy do tao dang ky moi");
             log.info("Auto-cancelled pending subscription {} before cash-paid subscription", pending.getId());
         });
 
@@ -373,8 +420,19 @@ public class SubscriptionService {
             if (SubscriptionStatus.PENDING_PAYMENT.equals(sub.getStatus())) {
                 sub.setStatus(SubscriptionStatus.CANCELLED);
                 subscriptionRepository.save(sub);
+                markPendingInvoicesFailed(subscriptionId, "Da huy phien thanh toan");
             }
         });
+    }
+
+    private void markPendingInvoicesFailed(Long subscriptionId, String message) {
+        invoiceRepository.findByFeeSubscriptionIdOrderByCreatedAtDesc(subscriptionId).stream()
+                .filter(invoice -> InvoiceStatus.PENDING.equals(invoice.getStatus()))
+                .forEach(invoice -> {
+                    invoice.setStatus(InvoiceStatus.FAILED);
+                    invoice.setMessage(message);
+                    invoiceRepository.save(invoice);
+                });
     }
 
     // ─────────────────────────────────────────────────────────────────
@@ -421,11 +479,15 @@ public class SubscriptionService {
         return invoiceRepository.findAllByUserId(userId).stream()
                 .map(inv -> SubscriptionInvoiceResponse.builder()
                         .id(inv.getId())
+                        .subscriptionId(inv.getFeeSubscription().getId())
                         .momoOrderId(inv.getMomoOrderId())
                         .momoTransId(inv.getMomoTransId())
                         .stripePaymentIntentId(inv.getStripePaymentIntentId())
                         .amount(inv.getAmount())
                         .status(inv.getStatus().name())
+                        .subscriptionStatus(inv.getFeeSubscription().getStatus().name())
+                        .payable(InvoiceStatus.PENDING.equals(inv.getStatus())
+                                && SubscriptionStatus.PENDING_PAYMENT.equals(inv.getFeeSubscription().getStatus()))
                         .type(inv.getType())
                         .message(inv.getMessage())
                         .licensePlate(inv.getFeeSubscription().getVehicle().getLicensePlate())

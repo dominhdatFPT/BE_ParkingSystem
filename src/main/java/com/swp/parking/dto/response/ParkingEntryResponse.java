@@ -29,6 +29,8 @@ public class ParkingEntryResponse {
 
     private Long orderId;
 
+    private String orderCode;
+
     private String licensePlate;
 
     private String vehicleType;

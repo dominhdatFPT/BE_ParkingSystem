@@ -12,6 +12,8 @@ public class SubscriptionInvoiceResponse {
 
     private Long id;
 
+    private Long subscriptionId;
+
     // ── MoMo (legacy — dữ liệu cũ) ──────────────────────────────────
     private String momoOrderId;
     private Long momoTransId;
@@ -23,6 +25,10 @@ public class SubscriptionInvoiceResponse {
 
     /** PENDING | SUCCESS | FAILED */
     private String status;
+
+    private String subscriptionStatus;
+
+    private Boolean payable;
 
     /** INITIAL | RENEWAL */
     private String type;
