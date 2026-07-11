@@ -32,6 +32,7 @@ public class ParkingEntryService {
 
     private static final List<String> ACTIVE_SUBSCRIPTION_STATUSES =
             List.of("ACTIVE", "PAID", "CONFIRMED", "APPROVED");
+    private static final int VISITOR_CARDS_PER_VEHICLE_TYPE = 100;
 
     private final JdbcTemplate jdbcTemplate;
 
@@ -75,8 +76,9 @@ public class ParkingEntryService {
                     .build();
         }
 
-        String nextCard = findFirstAvailableVisitorCard()
-                .orElseThrow(() -> new AppException(HttpStatus.CONFLICT, "Da het 100 the vang lai kha dung"))
+        String nextCard = findFirstAvailableVisitorCard(vehicleType)
+                .orElseThrow(() -> new AppException(HttpStatus.CONFLICT,
+                        "Da het 100 the vang lai kha dung cho " + displayVehicleType(vehicleType)))
                 .getCardCode();
 
         return visitor(licensePlate, vehicleType, nextCard, true,
@@ -140,8 +142,9 @@ public class ParkingEntryService {
             throw new AppException(HttpStatus.CONFLICT, "Xe nay dang co phien gui xe ACTIVE");
         }
 
-        VisitorCard visitorCard = lockAvailableVisitorCard(requestedVisitorCard)
-                .orElseThrow(() -> new AppException(HttpStatus.CONFLICT, "The vang lai khong kha dung hoac da het the"));
+        VisitorCard visitorCard = lockAvailableVisitorCard(requestedVisitorCard, vehicleType)
+                .orElseThrow(() -> new AppException(HttpStatus.CONFLICT,
+                        "The vang lai khong kha dung, da het the, hoac khong dung loai " + displayVehicleType(vehicleType)));
 
         Long vehicleTypeId = findVehicleTypeId(vehicleType)
                 .orElseThrow(() -> new AppException(HttpStatus.CONFLICT, "Chua cau hinh loai xe " + vehicleType));
@@ -295,12 +298,15 @@ public class ParkingEntryService {
         return count != null && count > 0;
     }
 
-    private Optional<VisitorCard> findFirstAvailableVisitorCard() {
+    private Optional<VisitorCard> findFirstAvailableVisitorCard(String vehicleType) {
+        Long vehicleTypeId = findVehicleTypeId(vehicleType)
+                .orElseThrow(() -> new AppException(HttpStatus.CONFLICT, "Chua cau hinh loai xe " + vehicleType));
         try {
             return jdbcTemplate.query("""
                     SELECT visitor_card_id, card_code, display_number, status
                     FROM visitor_cards
                     WHERE status = 'AVAILABLE'
+                      AND vehicle_type_id = ?
                     ORDER BY display_number
                     LIMIT 1
                     """, (rs, rowNum) -> VisitorCard.builder()
@@ -308,14 +314,17 @@ public class ParkingEntryService {
                             .cardCode(rs.getString("card_code"))
                             .displayNumber(rs.getInt("display_number"))
                             .status(rs.getString("status"))
-                            .build()
+                            .build(),
+                    vehicleTypeId
             ).stream().findFirst();
         } catch (EmptyResultDataAccessException ex) {
             return Optional.empty();
         }
     }
 
-    private Optional<VisitorCard> lockAvailableVisitorCard(String cardCode) {
+    private Optional<VisitorCard> lockAvailableVisitorCard(String cardCode, String vehicleType) {
+        Long vehicleTypeId = findVehicleTypeId(vehicleType)
+                .orElseThrow(() -> new AppException(HttpStatus.CONFLICT, "Chua cau hinh loai xe " + vehicleType));
         String sql;
         Object[] args;
 
@@ -324,21 +333,23 @@ public class ParkingEntryService {
                     SELECT visitor_card_id, card_code, display_number, status
                     FROM visitor_cards
                     WHERE status = 'AVAILABLE'
+                      AND vehicle_type_id = ?
                     ORDER BY display_number
                     LIMIT 1
                     FOR UPDATE SKIP LOCKED
                     """;
-            args = new Object[]{};
+            args = new Object[]{vehicleTypeId};
         } else {
             sql = """
                     SELECT visitor_card_id, card_code, display_number, status
                     FROM visitor_cards
                     WHERE card_code = ?
+                      AND vehicle_type_id = ?
                       AND status = 'AVAILABLE'
                     LIMIT 1
                     FOR UPDATE
                     """;
-            args = new Object[]{cardCode};
+            args = new Object[]{cardCode, vehicleTypeId};
         }
 
         return jdbcTemplate.query(sql, (rs, rowNum) -> VisitorCard.builder()
@@ -472,6 +483,7 @@ public class ParkingEntryService {
                         visitor_card_id bigserial PRIMARY KEY,
                         card_code varchar(20) NOT NULL UNIQUE,
                         display_number integer NOT NULL UNIQUE,
+                        vehicle_type_id bigint,
                         status varchar(30) NOT NULL DEFAULT 'AVAILABLE',
                         current_order_id bigint,
                         created_at timestamp NOT NULL DEFAULT now(),
@@ -479,17 +491,78 @@ public class ParkingEntryService {
                     )
                     """);
             jdbcTemplate.execute("""
-                    INSERT INTO visitor_cards (card_code, display_number, status, created_at, updated_at)
-                    SELECT concat('VIS', lpad(n::text, 3, '0')), n, 'AVAILABLE', now(), now()
-                    FROM generate_series(1, 100) AS n
-                    ON CONFLICT (card_code) DO NOTHING
+                    ALTER TABLE visitor_cards
+                    ADD COLUMN IF NOT EXISTS vehicle_type_id bigint
                     """);
+            ensureVisitorCardPools();
             jdbcTemplate.execute("""
                     CREATE INDEX IF NOT EXISTS idx_visitor_cards_status_number
                     ON visitor_cards (status, display_number)
                     """);
+            jdbcTemplate.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_visitor_cards_type_status_number
+                    ON visitor_cards (vehicle_type_id, status, display_number)
+                    """);
 
             initialized = true;
+        }
+    }
+
+    private void ensureVisitorCardPools() {
+        Optional<Long> motorbikeTypeId = findVehicleTypeId("MOTORBIKE");
+        Optional<Long> carTypeId = findVehicleTypeId("CAR");
+        if (motorbikeTypeId.isEmpty() || carTypeId.isEmpty()) {
+            return;
+        }
+
+        jdbcTemplate.update("""
+                UPDATE visitor_cards vc
+                   SET vehicle_type_id = ?, updated_at = now()
+                  FROM parking_orders po
+                 WHERE vc.vehicle_type_id IS NULL
+                   AND (vc.current_order_id = po.order_id OR po.visitor_card_id = vc.visitor_card_id)
+                   AND upper(COALESCE(po.notes, '')) LIKE '%%VEHICLE_TYPE=CAR%%'
+                """, carTypeId.get());
+        jdbcTemplate.update("""
+                UPDATE visitor_cards vc
+                   SET vehicle_type_id = ?, updated_at = now()
+                  FROM parking_orders po
+                 WHERE vc.vehicle_type_id IS NULL
+                   AND (vc.current_order_id = po.order_id OR po.visitor_card_id = vc.visitor_card_id)
+                   AND upper(COALESCE(po.notes, '')) LIKE '%%VEHICLE_TYPE=MOTORBIKE%%'
+                """, motorbikeTypeId.get());
+        jdbcTemplate.update("""
+                UPDATE visitor_cards
+                   SET vehicle_type_id = ?, updated_at = now()
+                 WHERE vehicle_type_id IS NULL
+                """, motorbikeTypeId.get());
+
+        ensureVisitorCardPool(motorbikeTypeId.get(), "MOTO", 1000);
+        ensureVisitorCardPool(carTypeId.get(), "CAR", 2000);
+    }
+
+    private void ensureVisitorCardPool(Long vehicleTypeId, String codePrefix, int displayBase) {
+        Integer currentCount = jdbcTemplate.queryForObject("""
+                SELECT COUNT(*)
+                  FROM visitor_cards
+                 WHERE vehicle_type_id = ?
+                """, Integer.class, vehicleTypeId);
+        int count = currentCount == null ? 0 : currentCount;
+        for (int n = 1; count < VISITOR_CARDS_PER_VEHICLE_TYPE && n <= 300; n++) {
+            String cardCode = codePrefix + String.format("%03d", n);
+            int displayNumber = displayBase + n;
+            int inserted = jdbcTemplate.update("""
+                    INSERT INTO visitor_cards (card_code, display_number, vehicle_type_id, status, created_at, updated_at)
+                    SELECT ?, ?, ?, 'AVAILABLE', now(), now()
+                    WHERE NOT EXISTS (
+                        SELECT 1
+                          FROM visitor_cards
+                         WHERE vehicle_type_id = ?
+                           AND card_code = ?
+                    )
+                    ON CONFLICT DO NOTHING
+                    """, cardCode, displayNumber, vehicleTypeId, vehicleTypeId, cardCode);
+            count += inserted;
         }
     }
 
