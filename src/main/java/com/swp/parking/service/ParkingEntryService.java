@@ -17,6 +17,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.sql.PreparedStatement;
+import java.text.Normalizer;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Locale;
@@ -264,16 +265,24 @@ public class ParkingEntryService {
 
     private Optional<Long> findVehicleTypeId(String vehicleType) {
         String expectedCode = "MOTORBIKE".equals(vehicleType) ? "MOTORBIKE" : "CAR";
-        return jdbcTemplate.query("""
-                SELECT vehicle_type_id
+        List<VehicleTypeRef> vehicleTypes = jdbcTemplate.query("""
+                SELECT vehicle_type_id, type_code, type_name
                 FROM vehicle_types
-                WHERE upper(COALESCE(type_code, '')) = ?
-                   OR (? = 'MOTORBIKE' AND upper(type_name) LIKE '%MOTOR%')
-                   OR (? = 'CAR' AND upper(type_name) NOT LIKE '%MOTOR%')
-                ORDER BY CASE WHEN upper(COALESCE(type_code, '')) = ? THEN 0 ELSE 1 END
-                LIMIT 1
-                """, (rs, rowNum) -> rs.getLong("vehicle_type_id"),
-                expectedCode, expectedCode, expectedCode, expectedCode).stream().findFirst();
+                ORDER BY vehicle_type_id
+                """, (rs, rowNum) -> new VehicleTypeRef(
+                rs.getLong("vehicle_type_id"),
+                rs.getString("type_code"),
+                rs.getString("type_name")
+        ));
+
+        return vehicleTypes.stream()
+                .filter(type -> expectedCode.equals(resolveVehicleTypeToken(type.typeCode())))
+                .map(VehicleTypeRef::id)
+                .findFirst()
+                .or(() -> vehicleTypes.stream()
+                        .filter(type -> expectedCode.equals(resolveVehicleTypeToken(type.typeName())))
+                        .map(VehicleTypeRef::id)
+                        .findFirst());
     }
 
     private boolean hasActiveOrder(String licensePlate) {
@@ -493,23 +502,50 @@ public class ParkingEntryService {
     }
 
     private String normalizeVehicleType(String value, String licensePlate) {
-        String normalized = value == null ? "" : value.trim().toUpperCase(Locale.ROOT);
-        if ("MOTORBIKE".equals(normalized) || normalized.contains("XE MÁY")) {
-            return "MOTORBIKE";
-        }
-        if ("CAR".equals(normalized) || normalized.contains("Ô TÔ")) {
-            return "CAR";
+        String resolved = resolveVehicleTypeToken(value);
+        if (!resolved.isBlank()) {
+            return resolved;
         }
         String plate = normalizePlate(licensePlate).replace(" ", "");
         return plate.matches("^\\d{2}[A-Z]\\d[-.].*") ? "MOTORBIKE" : "CAR";
     }
 
     private String displayVehicleType(String value) {
-        String normalized = value == null ? "" : value.trim().toUpperCase(Locale.ROOT);
-        if (normalized.contains("MOTORBIKE") || normalized.contains("XE MÁY")) {
+        if ("MOTORBIKE".equals(resolveVehicleTypeToken(value))) {
             return "Xe máy";
         }
         return "Ô tô";
+    }
+
+    private String resolveVehicleTypeToken(String value) {
+        String normalized = normalizeSearchText(value);
+        if (normalized.isBlank()) {
+            return "";
+        }
+        if (normalized.equals("MOTORBIKE")
+                || normalized.contains("MOTOR")
+                || normalized.contains("MOTO")
+                || normalized.contains("BIKE")
+                || normalized.contains("XE MAY")) {
+            return "MOTORBIKE";
+        }
+        if (normalized.equals("CAR")
+                || normalized.contains("AUTO")
+                || normalized.contains("O TO")
+                || normalized.contains("OTO")) {
+            return "CAR";
+        }
+        return "";
+    }
+
+    private String normalizeSearchText(String value) {
+        if (value == null) {
+            return "";
+        }
+        String text = Normalizer.normalize(value.trim(), Normalizer.Form.NFD)
+                .replaceAll("\\p{M}+", "")
+                .toUpperCase(Locale.ROOT);
+        return text.replaceAll("[^A-Z0-9]+", " ").trim().replaceAll("\\s+", " ");
     }
 
     private String compactPlate(String value) {
@@ -543,6 +579,9 @@ public class ParkingEntryService {
         private String cardCode;
         private Integer displayNumber;
         private String status;
+    }
+
+    private record VehicleTypeRef(Long id, String typeCode, String typeName) {
     }
 
     @Data

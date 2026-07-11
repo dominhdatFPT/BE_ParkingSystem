@@ -660,9 +660,22 @@ public class OperationsDashboardService {
     private String vehicleTypeExpression() {
         return """
                 CASE
-                    WHEN upper(COALESCE(vt.type_code, '')) LIKE 'MOTORBIKE%%'
-                      OR upper(COALESCE(vt.type_name, '')) LIKE '%%XE MÁY%%'
-                      OR upper(COALESCE(po.notes, '')) LIKE '%%VEHICLE_TYPE=MOTORBIKE%%'
+                    WHEN upper(COALESCE(po.notes, '')) LIKE '%%VEHICLE_TYPE=CAR%%'
+                    THEN 'CAR'
+                    WHEN upper(COALESCE(po.notes, '')) LIKE '%%VEHICLE_TYPE=MOTORBIKE%%'
+                    THEN 'MOTORBIKE'
+                    WHEN upper(COALESCE(vt.type_code, '')) LIKE 'CAR%%'
+                      OR upper(COALESCE(vt.type_name, '')) LIKE '%%CAR%%'
+                      OR upper(COALESCE(vt.type_name, '')) LIKE '%%O TO%%'
+                      OR upper(COALESCE(vt.type_name, '')) LIKE '%%OTO%%'
+                    THEN 'CAR'
+                    WHEN upper(COALESCE(vt.type_code, '')) LIKE 'MOTOR%%'
+                      OR upper(COALESCE(vt.type_code, '')) LIKE 'MOTO%%'
+                      OR upper(COALESCE(vt.type_name, '')) LIKE '%%MOTOR%%'
+                      OR upper(COALESCE(vt.type_name, '')) LIKE '%%MOTO%%'
+                      OR upper(COALESCE(vt.type_name, '')) LIKE '%%BIKE%%'
+                      OR upper(COALESCE(vt.type_name, '')) LIKE '%%XE MAY%%'
+                      OR upper(COALESCE(vt.type_name, '')) LIKE '%%XE M_Y%%'
                     THEN 'MOTORBIKE'
                     ELSE 'CAR'
                 END

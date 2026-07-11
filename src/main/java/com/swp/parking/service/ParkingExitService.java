@@ -15,6 +15,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.text.Normalizer;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
@@ -195,11 +196,13 @@ public class ParkingExitService {
                        po.payment_status,
                        po.payment_method,
                        po.fee_rate_id,
+                       po.notes,
                        COALESCE(po.entry_type,
                            CASE WHEN po.notes LIKE 'ENTRY_TYPE=MONTHLY%%' THEN 'SUBSCRIPTION' ELSE 'VISITOR' END
                        ) AS entry_type,
                        v.brand,
                        v.color,
+                       vt.type_code AS vehicle_type_code,
                        vt.type_name AS vehicle_type,
                        u.full_name AS customer_name,
                        vc.visitor_card_id,
@@ -240,9 +243,11 @@ public class ParkingExitService {
                 .paymentStatus(rs.getString("payment_status"))
                 .paymentMethod(rs.getString("payment_method"))
                 .feeRateId(nullableLong(rs, "fee_rate_id"))
+                .notes(rs.getString("notes"))
                 .entryType(rs.getString("entry_type"))
                 .brand(rs.getString("brand"))
                 .color(rs.getString("color"))
+                .vehicleTypeCode(rs.getString("vehicle_type_code"))
                 .vehicleType(rs.getString("vehicle_type"))
                 .customerName(rs.getString("customer_name"))
                 .visitorCardId(nullableLong(rs, "visitor_card_id"))
@@ -297,7 +302,7 @@ public class ParkingExitService {
                 .orderCode(row.getOrderCode())
                 .exitType(row.getEntryType())
                 .licensePlate(row.getLicensePlate())
-                .vehicleType(row.getVehicleType())
+                .vehicleType(displayVehicleType(resolveVehicleTypeToken(row), row.getVehicleType()))
                 .brand(row.getBrand())
                 .color(row.getColor())
                 .customerName(row.getCustomerName())
@@ -323,7 +328,7 @@ public class ParkingExitService {
 
     private ParkingExitResponse.FeeInfo calculateVisitorFee(
             ParkingExitRow row, LocalDateTime entryTime, LocalDateTime exitTime, long durationMinutes) {
-        FeeRate rate = findFeeRate(row.getVehicleTypeId(), row.getParkingId(), exitTime)
+        FeeRate rate = findFeeRate(resolveFeeVehicleTypeId(row), row.getParkingId(), exitTime)
                 .orElseThrow(() -> new AppException(
                         HttpStatus.CONFLICT,
                         "Chưa cấu hình bảng giá xe vãng lai cho loại xe này"
@@ -431,6 +436,100 @@ public class ParkingExitService {
         return first != null && !first.isBlank() ? first : fallback;
     }
 
+    private Long resolveFeeVehicleTypeId(ParkingExitRow row) {
+        String noteType = vehicleTypeFromNotes(row.getNotes());
+        if (!noteType.isBlank()) {
+            return findVehicleTypeId(noteType).orElse(row.getVehicleTypeId());
+        }
+        return row.getVehicleTypeId();
+    }
+
+    private Optional<Long> findVehicleTypeId(String vehicleType) {
+        String expectedCode = "MOTORBIKE".equals(vehicleType) ? "MOTORBIKE" : "CAR";
+        List<VehicleTypeRef> vehicleTypes = jdbcTemplate.query("""
+                SELECT vehicle_type_id, type_code, type_name
+                FROM vehicle_types
+                ORDER BY vehicle_type_id
+                """, (rs, rowNum) -> new VehicleTypeRef(
+                rs.getLong("vehicle_type_id"),
+                rs.getString("type_code"),
+                rs.getString("type_name")
+        ));
+
+        return vehicleTypes.stream()
+                .filter(type -> expectedCode.equals(resolveVehicleTypeToken(type.typeCode())))
+                .map(VehicleTypeRef::id)
+                .findFirst()
+                .or(() -> vehicleTypes.stream()
+                        .filter(type -> expectedCode.equals(resolveVehicleTypeToken(type.typeName())))
+                        .map(VehicleTypeRef::id)
+                        .findFirst());
+    }
+
+    private String resolveVehicleTypeToken(ParkingExitRow row) {
+        String noteType = vehicleTypeFromNotes(row.getNotes());
+        if (!noteType.isBlank()) {
+            return noteType;
+        }
+        String codeType = resolveVehicleTypeToken(row.getVehicleTypeCode());
+        if (!codeType.isBlank()) {
+            return codeType;
+        }
+        return resolveVehicleTypeToken(row.getVehicleType());
+    }
+
+    private String vehicleTypeFromNotes(String notes) {
+        String normalized = notes == null ? "" : notes.trim().toUpperCase(Locale.ROOT);
+        if (normalized.contains("VEHICLE_TYPE=MOTORBIKE")) {
+            return "MOTORBIKE";
+        }
+        if (normalized.contains("VEHICLE_TYPE=CAR")) {
+            return "CAR";
+        }
+        return "";
+    }
+
+    private String resolveVehicleTypeToken(String value) {
+        String normalized = normalizeSearchText(value);
+        if (normalized.isBlank()) {
+            return "";
+        }
+        if (normalized.equals("MOTORBIKE")
+                || normalized.contains("MOTOR")
+                || normalized.contains("MOTO")
+                || normalized.contains("BIKE")
+                || normalized.contains("XE MAY")) {
+            return "MOTORBIKE";
+        }
+        if (normalized.equals("CAR")
+                || normalized.contains("AUTO")
+                || normalized.contains("O TO")
+                || normalized.contains("OTO")) {
+            return "CAR";
+        }
+        return "";
+    }
+
+    private String displayVehicleType(String token, String fallback) {
+        if ("MOTORBIKE".equals(token)) {
+            return "Xe máy";
+        }
+        if ("CAR".equals(token)) {
+            return "Ô tô";
+        }
+        return firstNonBlank(fallback, "Ô tô");
+    }
+
+    private String normalizeSearchText(String value) {
+        if (value == null) {
+            return "";
+        }
+        String text = Normalizer.normalize(value.trim(), Normalizer.Form.NFD)
+                .replaceAll("\\p{M}+", "")
+                .toUpperCase(Locale.ROOT);
+        return text.replaceAll("[^A-Z0-9]+", " ").trim().replaceAll("\\s+", " ");
+    }
+
     private String normalizePaymentMethod(String value) {
         String normalized = value == null ? "CASH" : value.trim().toUpperCase(Locale.ROOT);
         return switch (normalized) {
@@ -455,9 +554,11 @@ public class ParkingExitService {
         private String paymentStatus;
         private String paymentMethod;
         private Long feeRateId;
+        private String notes;
         private String entryType;
         private String brand;
         private String color;
+        private String vehicleTypeCode;
         private String vehicleType;
         private String customerName;
         private Long visitorCardId;
@@ -470,6 +571,9 @@ public class ParkingExitService {
         private BigDecimal paidAmount;
         private LocalDateTime paidAt;
         private String transactionReference;
+    }
+
+    private record VehicleTypeRef(Long id, String typeCode, String typeName) {
     }
 
     @Data
