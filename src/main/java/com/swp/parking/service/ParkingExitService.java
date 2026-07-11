@@ -341,8 +341,11 @@ public class ParkingExitService {
                 .description("Tính theo thời gian gửi thực tế, làm tròn lên theo mỗi khung phí")
                 .firstBlockMinutes(rate.getFirstBlockMinutes())
                 .firstBlockFee(rate.getFirstBlockFee())
+                .nextBlockMinutes(rate.getNextBlockMinutes())
+                .nextBlockFee(rate.getNextBlockFee())
                 .additionalBlocks(additionalBlocks)
                 .additionalFee(additionalFee)
+                .dailyCap(rate.getDailyCap())
                 .build();
     }
 
