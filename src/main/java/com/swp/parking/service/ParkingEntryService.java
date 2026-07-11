@@ -23,6 +23,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicInteger;
 
 @Service
 @RequiredArgsConstructor
@@ -34,6 +35,7 @@ public class ParkingEntryService {
     private final JdbcTemplate jdbcTemplate;
 
     private volatile boolean initialized;
+    private final AtomicInteger orderCodeSequence = new AtomicInteger();
 
     @Transactional
     public ParkingEntryResponse checkVehicle(ParkingEntryCheckRequest request) {
@@ -348,7 +350,7 @@ public class ParkingEntryService {
             Long staffUserId,
             String entryType,
             String notes) {
-        String orderCode = "PO-" + System.currentTimeMillis();
+        String orderCode = generateOrderCode();
         KeyHolder keyHolder = new GeneratedKeyHolder();
 
         jdbcTemplate.update(connection -> {
@@ -410,6 +412,16 @@ public class ParkingEntryService {
                 orderCode
         );
         return new ParkingOrderRef(((Number) rows.get(0).get("order_id")).longValue(), orderCode);
+    }
+
+    private String generateOrderCode() {
+        String timestamp = Long.toString(System.currentTimeMillis(), 36).toUpperCase(Locale.ROOT);
+        if (timestamp.length() > 8) {
+            timestamp = timestamp.substring(timestamp.length() - 8);
+        }
+        int sequence = Math.floorMod(orderCodeSequence.getAndIncrement(), 36);
+        String suffix = String.valueOf(Character.forDigit(sequence, 36)).toUpperCase(Locale.ROOT);
+        return "P" + timestamp + suffix;
     }
 
     private void ensureOperationalTables() {
