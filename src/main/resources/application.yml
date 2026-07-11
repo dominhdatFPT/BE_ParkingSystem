@@ -20,6 +20,7 @@ spring:
           time_zone: ${SPRING_JPA_PROPERTIES_HIBERNATE_JDBC_TIME_ZONE:UTC}
 
 server:
+  address: ${SERVER_ADDRESS:0.0.0.0}
   port: ${PORT:8080}
 
 app:
