@@ -19,6 +19,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 
 import java.time.LocalDateTime;
 import java.util.Optional;
@@ -52,6 +53,10 @@ public class StripeService {
     /** Khởi tạo Stripe SDK với secret key khi bean được tạo */
     @PostConstruct
     public void init() {
+        if (!StringUtils.hasText(secretKey)) {
+            log.warn("Stripe secret key is not configured; Stripe payments will be unavailable");
+            return;
+        }
         Stripe.apiKey = secretKey;
         log.info("Stripe SDK khởi tạo thành công (currency mặc định: {})", defaultCurrency);
     }
@@ -87,6 +92,7 @@ public class StripeService {
     private StripeOrder createPaymentIntent(Long userId, Long subscriptionId, Long invoiceId,
                                             Long parkingOrderId, String orderType,
                                             Long amount, String description) {
+        requireConfigured();
         try {
             // VND là zero-decimal currency → truyền amount nguyên vẹn
             // Nếu đổi sang USD: amount * 100
@@ -149,6 +155,7 @@ public class StripeService {
      */
     @Transactional
     public Optional<StripeOrder> handleWebhook(String payload, String sigHeader) {
+        requireConfigured();
         Event event;
         try {
             // Xác minh HMAC-SHA256 chữ ký của Stripe
@@ -239,6 +246,7 @@ public class StripeService {
      */
     @Transactional
     public StripeOrder confirmIfSucceeded(String paymentIntentId) {
+        requireConfigured();
         StripeOrder order = getOrder(paymentIntentId);
 
         // Đã xử lý rồi (webhook hoặc confirm trước đó), không cần làm gì
@@ -264,6 +272,13 @@ public class StripeService {
         } catch (StripeException e) {
             log.error("confirmIfSucceeded lỗi retrieve {}: {}", paymentIntentId, e.getMessage());
             return order;
+        }
+    }
+
+    private void requireConfigured() {
+        if (!StringUtils.hasText(secretKey)) {
+            throw new AppException(HttpStatus.SERVICE_UNAVAILABLE,
+                    "Stripe is not configured on the server");
         }
     }
 }
