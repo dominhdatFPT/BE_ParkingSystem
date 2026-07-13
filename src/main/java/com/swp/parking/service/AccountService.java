@@ -2,6 +2,7 @@ package com.swp.parking.service;
 
 import com.swp.parking.dto.request.CreateAccountRequest;
 import com.swp.parking.dto.response.AccountUserResponse;
+import com.swp.parking.exception.AppException;
 import com.swp.parking.exception.DuplicateEmailException;
 import com.swp.parking.exception.InvalidRoleException;
 import com.swp.parking.exception.NotFoundException;
@@ -15,14 +16,17 @@ import com.swp.parking.repository.EmployeeRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 @Service
@@ -32,6 +36,8 @@ public class AccountService {
 
     private static final String STATUS_ACTIVE = "ACTIVE";
     private static final String STATUS_INACTIVE = "INACTIVE";
+    private static final Pattern GMAIL_EMAIL_PATTERN =
+            Pattern.compile(com.swp.parking.validation.ValidationPatterns.GMAIL_EMAIL, Pattern.CASE_INSENSITIVE);
     private static final Set<UserRole> VALID_ROLES =
             Set.of(UserRole.USER, UserRole.STAFF, UserRole.ADMIN);
     private static final List<UserRole> STAFF_ROLES =
@@ -82,8 +88,9 @@ public class AccountService {
     }
 
     public AccountUserResponse createUser(CreateAccountRequest request) {
-        if (accountUserRepository.existsByEmail(request.getEmail())) {
-            throw new DuplicateEmailException("Email already exists: " + request.getEmail());
+        String email = normalizeEmail(request.getEmail());
+        if (accountUserRepository.existsByEmailIgnoreCase(email)) {
+            throw new DuplicateEmailException("Email already exists: " + email);
         }
 
         UserRole role;
@@ -94,8 +101,8 @@ public class AccountService {
         }
 
         User user = User.builder()
-                .fullName(request.getFullName())
-                .email(request.getEmail())
+                .fullName(request.getFullName().trim())
+                .email(email)
                 .phone(normalizeOptional(request.getPhone()))
                 .password(passwordEncoder.encode(request.getPassword()))
                 .role(role)
@@ -225,6 +232,17 @@ public class AccountService {
         }
         String trimmed = value.trim();
         return trimmed.isEmpty() ? null : trimmed;
+    }
+
+    private String normalizeEmail(String value) {
+        String normalized = value == null ? null : value.trim().toLowerCase(Locale.ROOT);
+        if (normalized == null || normalized.isBlank()) {
+            throw new AppException(HttpStatus.BAD_REQUEST, "Email is required");
+        }
+        if (!GMAIL_EMAIL_PATTERN.matcher(normalized).matches()) {
+            throw new AppException(HttpStatus.BAD_REQUEST, "Email must be a Gmail address");
+        }
+        return normalized;
     }
 
     private UserRole parseRoleFilter(String value) {

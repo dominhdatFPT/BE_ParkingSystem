@@ -15,6 +15,10 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
     boolean existsByEmail(String email);
 
+    Optional<User> findByEmailIgnoreCase(String email);
+
+    boolean existsByEmailIgnoreCase(String email);
+
     @Query(value = "select e.role from employees e where e.user_id = :userId and e.status = 'ACTIVE' limit 1", nativeQuery = true)
     Optional<String> findActiveEmployeeRoleByUserId(@Param("userId") Long userId);
 }
