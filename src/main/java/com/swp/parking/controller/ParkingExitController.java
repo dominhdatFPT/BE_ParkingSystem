@@ -4,6 +4,7 @@ import com.swp.parking.dto.request.ParkingExitCheckRequest;
 import com.swp.parking.dto.request.ParkingExitConfirmRequest;
 import com.swp.parking.dto.response.ParkingExitResponse;
 import com.swp.parking.service.ParkingExitService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -21,7 +22,7 @@ public class ParkingExitController {
     private final ParkingExitService parkingExitService;
 
     @PostMapping("/check")
-    public ResponseEntity<ParkingExitResponse> checkVehicle(@RequestBody ParkingExitCheckRequest request) {
+    public ResponseEntity<ParkingExitResponse> checkVehicle(@Valid @RequestBody ParkingExitCheckRequest request) {
         return ResponseEntity.ok(parkingExitService.checkVehicle(request));
     }
 
