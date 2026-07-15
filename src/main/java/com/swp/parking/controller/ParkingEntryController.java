@@ -5,6 +5,7 @@ import com.swp.parking.dto.request.ParkingEntryConfirmRequest;
 import com.swp.parking.dto.response.ParkingEntryResponse;
 import com.swp.parking.service.ParkingEntryService;
 import com.swp.parking.service.SecurityRoleService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -22,13 +23,13 @@ public class ParkingEntryController {
     private final SecurityRoleService securityRoleService;
 
     @PostMapping("/check")
-    public ResponseEntity<ParkingEntryResponse> checkVehicle(@RequestBody ParkingEntryCheckRequest request) {
+    public ResponseEntity<ParkingEntryResponse> checkVehicle(@Valid @RequestBody ParkingEntryCheckRequest request) {
         securityRoleService.requireAnyRole("ADMIN", "STAFF");
         return ResponseEntity.ok(parkingEntryService.checkVehicle(request));
     }
 
     @PostMapping("/confirm")
-    public ResponseEntity<ParkingEntryResponse> confirmEntry(@RequestBody ParkingEntryConfirmRequest request) {
+    public ResponseEntity<ParkingEntryResponse> confirmEntry(@Valid @RequestBody ParkingEntryConfirmRequest request) {
         securityRoleService.requireAnyRole("ADMIN", "STAFF");
         Long staffUserId = (Long) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
         return ResponseEntity.ok(parkingEntryService.confirmEntry(request, staffUserId));
