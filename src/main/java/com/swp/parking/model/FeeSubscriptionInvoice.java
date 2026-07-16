@@ -51,11 +51,6 @@ public class FeeSubscriptionInvoice {
     @Column(name = "stripe_payment_intent_id", length = 100)
     private String stripePaymentIntentId;
 
-    // ── Stripe ───────────────────────────────────────────────────────
-    // PaymentIntent ID của Stripe (pi_xxx), liên kết với bảng stripe_order
-    @Column(name = "stripe_payment_intent_id", length = 100)
-    private String stripePaymentIntentId;
-
     @Column(name = "message", length = 512)
     private String message;
 
