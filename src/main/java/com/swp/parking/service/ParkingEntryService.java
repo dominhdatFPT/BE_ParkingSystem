@@ -17,12 +17,14 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.sql.PreparedStatement;
+import java.text.Normalizer;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicInteger;
 
 @Service
 @RequiredArgsConstructor
@@ -30,10 +32,12 @@ public class ParkingEntryService {
 
     private static final List<String> ACTIVE_SUBSCRIPTION_STATUSES =
             List.of("ACTIVE", "PAID", "CONFIRMED", "APPROVED");
+    private static final int VISITOR_CARDS_PER_VEHICLE_TYPE = 100;
 
     private final JdbcTemplate jdbcTemplate;
 
     private volatile boolean initialized;
+    private final AtomicInteger orderCodeSequence = new AtomicInteger();
 
     @Transactional
     public ParkingEntryResponse checkVehicle(ParkingEntryCheckRequest request) {
@@ -72,8 +76,9 @@ public class ParkingEntryService {
                     .build();
         }
 
-        String nextCard = findFirstAvailableVisitorCard()
-                .orElseThrow(() -> new AppException(HttpStatus.CONFLICT, "Da het 100 the vang lai kha dung"))
+        String nextCard = findFirstAvailableVisitorCard(vehicleType)
+                .orElseThrow(() -> new AppException(HttpStatus.CONFLICT,
+                        "Da het 100 the vang lai kha dung cho " + displayVehicleType(vehicleType)))
                 .getCardCode();
 
         return visitor(licensePlate, vehicleType, nextCard, true,
@@ -101,7 +106,7 @@ public class ParkingEntryService {
                 throw new AppException(HttpStatus.CONFLICT, "Xe nay dang co phien gui xe ACTIVE");
             }
 
-            Long orderId = insertParkingOrder(
+            ParkingOrderRef order = insertParkingOrder(
                     licensePlate,
                     vehicle.getVehicleId(),
                     vehicle.getVehicleTypeId(),
@@ -120,7 +125,8 @@ public class ParkingEntryService {
                     .customerName(vehicle.getCustomerName())
                     .vehicleBrand(vehicle.getBrand())
                     .vehicleColor(vehicle.getColor())
-                    .orderId(orderId)
+                    .orderId(order.getId())
+                    .orderCode(order.getCode())
                     .licensePlate(vehicle.getLicensePlate())
                     .vehicleType(displayVehicleType(firstNonBlank(vehicle.getVehicleType(), vehicleType)))
                     .monthlyPackageName(vehicle.getPackageName())
@@ -136,13 +142,14 @@ public class ParkingEntryService {
             throw new AppException(HttpStatus.CONFLICT, "Xe nay dang co phien gui xe ACTIVE");
         }
 
-        VisitorCard visitorCard = lockAvailableVisitorCard(requestedVisitorCard)
-                .orElseThrow(() -> new AppException(HttpStatus.CONFLICT, "The vang lai khong kha dung hoac da het the"));
+        VisitorCard visitorCard = lockAvailableVisitorCard(requestedVisitorCard, vehicleType)
+                .orElseThrow(() -> new AppException(HttpStatus.CONFLICT,
+                        "The vang lai khong kha dung, da het the, hoac khong dung loai " + displayVehicleType(vehicleType)));
 
         Long vehicleTypeId = findVehicleTypeId(vehicleType)
                 .orElseThrow(() -> new AppException(HttpStatus.CONFLICT, "Chua cau hinh loai xe " + vehicleType));
 
-        Long orderId = insertParkingOrder(
+        ParkingOrderRef order = insertParkingOrder(
                 licensePlate,
                 null,
                 vehicleTypeId,
@@ -159,13 +166,14 @@ public class ParkingEntryService {
                     current_order_id = ?,
                     updated_at = now()
                 WHERE visitor_card_id = ?
-                """, orderId, visitorCard.getId());
+                """, order.getId(), visitorCard.getId());
 
         return ParkingEntryResponse.builder()
                 .entryType("VISITOR")
                 .registered(false)
                 .hasActiveSubscription(false)
-                .orderId(orderId)
+                .orderId(order.getId())
+                .orderCode(order.getCode())
                 .licensePlate(licensePlate)
                 .vehicleType(displayVehicleType(vehicleType))
                 .visitorCardCode(visitorCard.getCardCode())
@@ -260,16 +268,24 @@ public class ParkingEntryService {
 
     private Optional<Long> findVehicleTypeId(String vehicleType) {
         String expectedCode = "MOTORBIKE".equals(vehicleType) ? "MOTORBIKE" : "CAR";
-        return jdbcTemplate.query("""
-                SELECT vehicle_type_id
+        List<VehicleTypeRef> vehicleTypes = jdbcTemplate.query("""
+                SELECT vehicle_type_id, type_code, type_name
                 FROM vehicle_types
-                WHERE upper(COALESCE(type_code, '')) = ?
-                   OR (? = 'MOTORBIKE' AND upper(type_name) LIKE '%MOTOR%')
-                   OR (? = 'CAR' AND upper(type_name) NOT LIKE '%MOTOR%')
-                ORDER BY CASE WHEN upper(COALESCE(type_code, '')) = ? THEN 0 ELSE 1 END
-                LIMIT 1
-                """, (rs, rowNum) -> rs.getLong("vehicle_type_id"),
-                expectedCode, expectedCode, expectedCode, expectedCode).stream().findFirst();
+                ORDER BY vehicle_type_id
+                """, (rs, rowNum) -> new VehicleTypeRef(
+                rs.getLong("vehicle_type_id"),
+                rs.getString("type_code"),
+                rs.getString("type_name")
+        ));
+
+        return vehicleTypes.stream()
+                .filter(type -> expectedCode.equals(resolveVehicleTypeToken(type.typeCode())))
+                .map(VehicleTypeRef::id)
+                .findFirst()
+                .or(() -> vehicleTypes.stream()
+                        .filter(type -> expectedCode.equals(resolveVehicleTypeToken(type.typeName())))
+                        .map(VehicleTypeRef::id)
+                        .findFirst());
     }
 
     private boolean hasActiveOrder(String licensePlate) {
@@ -282,12 +298,15 @@ public class ParkingEntryService {
         return count != null && count > 0;
     }
 
-    private Optional<VisitorCard> findFirstAvailableVisitorCard() {
+    private Optional<VisitorCard> findFirstAvailableVisitorCard(String vehicleType) {
+        Long vehicleTypeId = findVehicleTypeId(vehicleType)
+                .orElseThrow(() -> new AppException(HttpStatus.CONFLICT, "Chua cau hinh loai xe " + vehicleType));
         try {
             return jdbcTemplate.query("""
                     SELECT visitor_card_id, card_code, display_number, status
                     FROM visitor_cards
                     WHERE status = 'AVAILABLE'
+                      AND vehicle_type_id = ?
                     ORDER BY display_number
                     LIMIT 1
                     """, (rs, rowNum) -> VisitorCard.builder()
@@ -295,14 +314,17 @@ public class ParkingEntryService {
                             .cardCode(rs.getString("card_code"))
                             .displayNumber(rs.getInt("display_number"))
                             .status(rs.getString("status"))
-                            .build()
+                            .build(),
+                    vehicleTypeId
             ).stream().findFirst();
         } catch (EmptyResultDataAccessException ex) {
             return Optional.empty();
         }
     }
 
-    private Optional<VisitorCard> lockAvailableVisitorCard(String cardCode) {
+    private Optional<VisitorCard> lockAvailableVisitorCard(String cardCode, String vehicleType) {
+        Long vehicleTypeId = findVehicleTypeId(vehicleType)
+                .orElseThrow(() -> new AppException(HttpStatus.CONFLICT, "Chua cau hinh loai xe " + vehicleType));
         String sql;
         Object[] args;
 
@@ -311,21 +333,23 @@ public class ParkingEntryService {
                     SELECT visitor_card_id, card_code, display_number, status
                     FROM visitor_cards
                     WHERE status = 'AVAILABLE'
+                      AND vehicle_type_id = ?
                     ORDER BY display_number
                     LIMIT 1
                     FOR UPDATE SKIP LOCKED
                     """;
-            args = new Object[]{};
+            args = new Object[]{vehicleTypeId};
         } else {
             sql = """
                     SELECT visitor_card_id, card_code, display_number, status
                     FROM visitor_cards
                     WHERE card_code = ?
+                      AND vehicle_type_id = ?
                       AND status = 'AVAILABLE'
                     LIMIT 1
                     FOR UPDATE
                     """;
-            args = new Object[]{cardCode};
+            args = new Object[]{cardCode, vehicleTypeId};
         }
 
         return jdbcTemplate.query(sql, (rs, rowNum) -> VisitorCard.builder()
@@ -337,7 +361,7 @@ public class ParkingEntryService {
         ).stream().findFirst();
     }
 
-    private Long insertParkingOrder(
+    private ParkingOrderRef insertParkingOrder(
             String licensePlate,
             Long vehicleId,
             Long vehicleTypeId,
@@ -346,7 +370,7 @@ public class ParkingEntryService {
             Long staffUserId,
             String entryType,
             String notes) {
-        String orderCode = "PO-" + System.currentTimeMillis();
+        String orderCode = generateOrderCode();
         KeyHolder keyHolder = new GeneratedKeyHolder();
 
         jdbcTemplate.update(connection -> {
@@ -400,14 +424,24 @@ public class ParkingEntryService {
 
         Number generatedId = keyHolder.getKey();
         if (generatedId != null) {
-            return generatedId.longValue();
+            return new ParkingOrderRef(generatedId.longValue(), orderCode);
         }
 
         List<Map<String, Object>> rows = jdbcTemplate.queryForList(
                 "SELECT order_id FROM parking_orders WHERE order_code = ?",
                 orderCode
         );
-        return ((Number) rows.get(0).get("order_id")).longValue();
+        return new ParkingOrderRef(((Number) rows.get(0).get("order_id")).longValue(), orderCode);
+    }
+
+    private String generateOrderCode() {
+        String timestamp = Long.toString(System.currentTimeMillis(), 36).toUpperCase(Locale.ROOT);
+        if (timestamp.length() > 8) {
+            timestamp = timestamp.substring(timestamp.length() - 8);
+        }
+        int sequence = Math.floorMod(orderCodeSequence.getAndIncrement(), 36);
+        String suffix = String.valueOf(Character.forDigit(sequence, 36)).toUpperCase(Locale.ROOT);
+        return "P" + timestamp + suffix;
     }
 
     private void ensureOperationalTables() {
@@ -449,6 +483,7 @@ public class ParkingEntryService {
                         visitor_card_id bigserial PRIMARY KEY,
                         card_code varchar(20) NOT NULL UNIQUE,
                         display_number integer NOT NULL UNIQUE,
+                        vehicle_type_id bigint,
                         status varchar(30) NOT NULL DEFAULT 'AVAILABLE',
                         current_order_id bigint,
                         created_at timestamp NOT NULL DEFAULT now(),
@@ -456,17 +491,78 @@ public class ParkingEntryService {
                     )
                     """);
             jdbcTemplate.execute("""
-                    INSERT INTO visitor_cards (card_code, display_number, status, created_at, updated_at)
-                    SELECT concat('VIS', lpad(n::text, 3, '0')), n, 'AVAILABLE', now(), now()
-                    FROM generate_series(1, 100) AS n
-                    ON CONFLICT (card_code) DO NOTHING
+                    ALTER TABLE visitor_cards
+                    ADD COLUMN IF NOT EXISTS vehicle_type_id bigint
                     """);
+            ensureVisitorCardPools();
             jdbcTemplate.execute("""
                     CREATE INDEX IF NOT EXISTS idx_visitor_cards_status_number
                     ON visitor_cards (status, display_number)
                     """);
+            jdbcTemplate.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_visitor_cards_type_status_number
+                    ON visitor_cards (vehicle_type_id, status, display_number)
+                    """);
 
             initialized = true;
+        }
+    }
+
+    private void ensureVisitorCardPools() {
+        Optional<Long> motorbikeTypeId = findVehicleTypeId("MOTORBIKE");
+        Optional<Long> carTypeId = findVehicleTypeId("CAR");
+        if (motorbikeTypeId.isEmpty() || carTypeId.isEmpty()) {
+            return;
+        }
+
+        jdbcTemplate.update("""
+                UPDATE visitor_cards vc
+                   SET vehicle_type_id = ?, updated_at = now()
+                  FROM parking_orders po
+                 WHERE vc.vehicle_type_id IS NULL
+                   AND (vc.current_order_id = po.order_id OR po.visitor_card_id = vc.visitor_card_id)
+                   AND upper(COALESCE(po.notes, '')) LIKE '%%VEHICLE_TYPE=CAR%%'
+                """, carTypeId.get());
+        jdbcTemplate.update("""
+                UPDATE visitor_cards vc
+                   SET vehicle_type_id = ?, updated_at = now()
+                  FROM parking_orders po
+                 WHERE vc.vehicle_type_id IS NULL
+                   AND (vc.current_order_id = po.order_id OR po.visitor_card_id = vc.visitor_card_id)
+                   AND upper(COALESCE(po.notes, '')) LIKE '%%VEHICLE_TYPE=MOTORBIKE%%'
+                """, motorbikeTypeId.get());
+        jdbcTemplate.update("""
+                UPDATE visitor_cards
+                   SET vehicle_type_id = ?, updated_at = now()
+                 WHERE vehicle_type_id IS NULL
+                """, motorbikeTypeId.get());
+
+        ensureVisitorCardPool(motorbikeTypeId.get(), "MOTO", 1000);
+        ensureVisitorCardPool(carTypeId.get(), "CAR", 2000);
+    }
+
+    private void ensureVisitorCardPool(Long vehicleTypeId, String codePrefix, int displayBase) {
+        Integer currentCount = jdbcTemplate.queryForObject("""
+                SELECT COUNT(*)
+                  FROM visitor_cards
+                 WHERE vehicle_type_id = ?
+                """, Integer.class, vehicleTypeId);
+        int count = currentCount == null ? 0 : currentCount;
+        for (int n = 1; count < VISITOR_CARDS_PER_VEHICLE_TYPE && n <= 300; n++) {
+            String cardCode = codePrefix + String.format("%03d", n);
+            int displayNumber = displayBase + n;
+            int inserted = jdbcTemplate.update("""
+                    INSERT INTO visitor_cards (card_code, display_number, vehicle_type_id, status, created_at, updated_at)
+                    SELECT ?, ?, ?, 'AVAILABLE', now(), now()
+                    WHERE NOT EXISTS (
+                        SELECT 1
+                          FROM visitor_cards
+                         WHERE vehicle_type_id = ?
+                           AND card_code = ?
+                    )
+                    ON CONFLICT DO NOTHING
+                    """, cardCode, displayNumber, vehicleTypeId, vehicleTypeId, cardCode);
+            count += inserted;
         }
     }
 
@@ -479,23 +575,50 @@ public class ParkingEntryService {
     }
 
     private String normalizeVehicleType(String value, String licensePlate) {
-        String normalized = value == null ? "" : value.trim().toUpperCase(Locale.ROOT);
-        if ("MOTORBIKE".equals(normalized) || normalized.contains("XE MÁY")) {
-            return "MOTORBIKE";
-        }
-        if ("CAR".equals(normalized) || normalized.contains("Ô TÔ")) {
-            return "CAR";
+        String resolved = resolveVehicleTypeToken(value);
+        if (!resolved.isBlank()) {
+            return resolved;
         }
         String plate = normalizePlate(licensePlate).replace(" ", "");
         return plate.matches("^\\d{2}[A-Z]\\d[-.].*") ? "MOTORBIKE" : "CAR";
     }
 
     private String displayVehicleType(String value) {
-        String normalized = value == null ? "" : value.trim().toUpperCase(Locale.ROOT);
-        if (normalized.contains("MOTORBIKE") || normalized.contains("XE MÁY")) {
+        if ("MOTORBIKE".equals(resolveVehicleTypeToken(value))) {
             return "Xe máy";
         }
         return "Ô tô";
+    }
+
+    private String resolveVehicleTypeToken(String value) {
+        String normalized = normalizeSearchText(value);
+        if (normalized.isBlank()) {
+            return "";
+        }
+        if (normalized.equals("MOTORBIKE")
+                || normalized.contains("MOTOR")
+                || normalized.contains("MOTO")
+                || normalized.contains("BIKE")
+                || normalized.contains("XE MAY")) {
+            return "MOTORBIKE";
+        }
+        if (normalized.equals("CAR")
+                || normalized.contains("AUTO")
+                || normalized.contains("O TO")
+                || normalized.contains("OTO")) {
+            return "CAR";
+        }
+        return "";
+    }
+
+    private String normalizeSearchText(String value) {
+        if (value == null) {
+            return "";
+        }
+        String text = Normalizer.normalize(value.trim(), Normalizer.Form.NFD)
+                .replaceAll("\\p{M}+", "")
+                .toUpperCase(Locale.ROOT);
+        return text.replaceAll("[^A-Z0-9]+", " ").trim().replaceAll("\\s+", " ");
     }
 
     private String compactPlate(String value) {
@@ -516,11 +639,22 @@ public class ParkingEntryService {
     @Data
     @Builder
     @AllArgsConstructor
+    private static class ParkingOrderRef {
+        private Long id;
+        private String code;
+    }
+
+    @Data
+    @Builder
+    @AllArgsConstructor
     private static class VisitorCard {
         private Long id;
         private String cardCode;
         private Integer displayNumber;
         private String status;
+    }
+
+    private record VehicleTypeRef(Long id, String typeCode, String typeName) {
     }
 
     @Data

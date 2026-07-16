@@ -63,6 +63,66 @@ public class SupportSchemaInitializer implements ApplicationRunner {
                 CREATE INDEX IF NOT EXISTS idx_visitor_cards_current_order
                 ON visitor_cards(current_order_id)
                 """);
+        jdbcTemplate.execute("""
+                CREATE TABLE IF NOT EXISTS parking_order_payments (
+                    payment_id bigserial PRIMARY KEY,
+                    order_id bigint NOT NULL REFERENCES parking_orders(order_id),
+                    amount numeric(19, 2) NOT NULL,
+                    payment_method varchar(30) NOT NULL,
+                    payment_status varchar(30) NOT NULL,
+                    received_by bigint REFERENCES users(user_id),
+                    paid_at timestamp,
+                    transaction_reference varchar(120),
+                    notes text,
+                    created_at timestamp NOT NULL DEFAULT now(),
+                    updated_at timestamp NOT NULL DEFAULT now()
+                )
+                """);
+        jdbcTemplate.execute("""
+                CREATE UNIQUE INDEX IF NOT EXISTS uq_parking_order_payment
+                ON parking_order_payments(order_id)
+                """);
+        jdbcTemplate.execute("""
+                ALTER TABLE parking_order_payments
+                DROP CONSTRAINT IF EXISTS chk_parking_payment_method
+                """);
+        jdbcTemplate.execute("""
+                ALTER TABLE parking_order_payments
+                ADD CONSTRAINT chk_parking_payment_method
+                CHECK (payment_method IN ('CASH', 'MOMO', 'BANK_TRANSFER', 'STRIPE')) NOT VALID
+                """);
+        jdbcTemplate.execute("""
+                CREATE TABLE IF NOT EXISTS stripe_order (
+                    payment_intent_id varchar(100) PRIMARY KEY,
+                    user_id bigint,
+                    subscription_id bigint,
+                    invoice_id bigint,
+                    parking_order_id bigint,
+                    order_type varchar(30) DEFAULT 'SUBSCRIPTION',
+                    amount bigint NOT NULL,
+                    currency varchar(10),
+                    description varchar(500),
+                    client_secret text,
+                    status varchar(20) NOT NULL,
+                    stripe_charge_id varchar(100),
+                    failure_message varchar(500),
+                    created_at timestamp DEFAULT now(),
+                    expired_at timestamp,
+                    paid_at timestamp
+                )
+                """);
+        jdbcTemplate.execute("""
+                ALTER TABLE stripe_order
+                ADD COLUMN IF NOT EXISTS parking_order_id BIGINT
+                """);
+        jdbcTemplate.execute("""
+                ALTER TABLE stripe_order
+                ADD COLUMN IF NOT EXISTS order_type VARCHAR(30) DEFAULT 'SUBSCRIPTION'
+                """);
+        jdbcTemplate.execute("""
+                CREATE INDEX IF NOT EXISTS idx_stripe_order_parking_order_id
+                ON stripe_order(parking_order_id)
+                """);
         log.info("Support incident schema is ready");
     }
 }

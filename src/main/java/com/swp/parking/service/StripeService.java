@@ -19,13 +19,14 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 
 import java.time.LocalDateTime;
 import java.util.Optional;
 
 /**
  * Xử lý toàn bộ nghiệp vụ Stripe:
- *   1. Tạo PaymentIntent (thay thế việc tạo link VNPay)
+ *   1. Tạo PaymentIntent
  *   2. Xác minh chữ ký webhook và cập nhật trạng thái đơn
  *   3. Truy vấn trạng thái StripeOrder để FE polling
  */
@@ -43,7 +44,7 @@ public class StripeService {
     @Value("${stripe.currency:vnd}")
     private String defaultCurrency;
 
-    /** Đơn hết hạn sau N phút (tương tự VNPay) */
+    /** Đơn hết hạn sau N phút */
     @Value("${stripe.order-expire-minutes:30}")
     private int orderExpireMinutes;
 
@@ -52,6 +53,10 @@ public class StripeService {
     /** Khởi tạo Stripe SDK với secret key khi bean được tạo */
     @PostConstruct
     public void init() {
+        if (!StringUtils.hasText(secretKey)) {
+            log.warn("Stripe secret key is not configured; Stripe payments will be unavailable");
+            return;
+        }
         Stripe.apiKey = secretKey;
         log.info("Stripe SDK khởi tạo thành công (currency mặc định: {})", defaultCurrency);
     }
@@ -76,6 +81,18 @@ public class StripeService {
     @Transactional
     public StripeOrder createPaymentIntent(Long userId, Long subscriptionId,
                                            Long invoiceId, Long amount, String description) {
+        return createPaymentIntent(userId, subscriptionId, invoiceId, null, "SUBSCRIPTION", amount, description);
+    }
+
+    @Transactional
+    public StripeOrder createParkingPaymentIntent(Long parkingOrderId, Long amount, String description) {
+        return createPaymentIntent(null, null, null, parkingOrderId, "PARKING_EXIT", amount, description);
+    }
+
+    private StripeOrder createPaymentIntent(Long userId, Long subscriptionId, Long invoiceId,
+                                            Long parkingOrderId, String orderType,
+                                            Long amount, String description) {
+        requireConfigured();
         try {
             // VND là zero-decimal currency → truyền amount nguyên vẹn
             // Nếu đổi sang USD: amount * 100
@@ -86,6 +103,8 @@ public class StripeService {
                     .putMetadata("subscriptionId", String.valueOf(subscriptionId))
                     .putMetadata("invoiceId", String.valueOf(invoiceId))
                     .putMetadata("userId", String.valueOf(userId))
+                    .putMetadata("parkingOrderId", String.valueOf(parkingOrderId))
+                    .putMetadata("orderType", orderType)
                     // Cho phép thanh toán thẻ
                     .addPaymentMethodType("card")
                     .build();
@@ -97,6 +116,8 @@ public class StripeService {
                     .userId(userId)
                     .subscriptionId(subscriptionId)
                     .invoiceId(invoiceId)
+                    .parkingOrderId(parkingOrderId)
+                    .orderType(orderType)
                     .amount(amount)
                     .currency(defaultCurrency)
                     .description(description)
@@ -134,6 +155,7 @@ public class StripeService {
      */
     @Transactional
     public Optional<StripeOrder> handleWebhook(String payload, String sigHeader) {
+        requireConfigured();
         Event event;
         try {
             // Xác minh HMAC-SHA256 chữ ký của Stripe
@@ -224,6 +246,7 @@ public class StripeService {
      */
     @Transactional
     public StripeOrder confirmIfSucceeded(String paymentIntentId) {
+        requireConfigured();
         StripeOrder order = getOrder(paymentIntentId);
 
         // Đã xử lý rồi (webhook hoặc confirm trước đó), không cần làm gì
@@ -249,6 +272,13 @@ public class StripeService {
         } catch (StripeException e) {
             log.error("confirmIfSucceeded lỗi retrieve {}: {}", paymentIntentId, e.getMessage());
             return order;
+        }
+    }
+
+    private void requireConfigured() {
+        if (!StringUtils.hasText(secretKey)) {
+            throw new AppException(HttpStatus.SERVICE_UNAVAILABLE,
+                    "Stripe is not configured on the server");
         }
     }
 }

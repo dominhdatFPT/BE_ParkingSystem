@@ -30,6 +30,13 @@ public class StripeOrder {
     @Column(name = "invoice_id")
     private Long invoiceId;
 
+    @Column(name = "parking_order_id")
+    private Long parkingOrderId;
+
+    @Column(name = "order_type", length = 30)
+    @Builder.Default
+    private String orderType = "SUBSCRIPTION";
+
     /** Số tiền thực tế theo đơn vị tiền tệ (VND → không nhân 100) */
     @Column(name = "amount", nullable = false)
     private Long amount;

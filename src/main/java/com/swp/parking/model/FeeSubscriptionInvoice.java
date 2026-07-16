@@ -46,14 +46,10 @@ public class FeeSubscriptionInvoice {
     @Column(name = "momo_trans_id")
     private Long momoTransId;
 
-    // ── VNPay ────────────────────────────────────────────────────────
-    // Mã tham chiếu gửi lên VNPay (vnp_TxnRef), liên kết với bảng vnpay_order
-    @Column(name = "vnp_txn_ref", length = 50)
-    private String vnpTxnRef;
-
-    // Mã giao dịch VNPay trả về (vnp_TransactionNo) dùng để tra soát
-    @Column(name = "vnp_transaction_no", length = 100)
-    private String vnpTransactionNo;
+    // ── Stripe ───────────────────────────────────────────────────────
+    // PaymentIntent ID của Stripe (pi_xxx), liên kết với bảng stripe_order
+    @Column(name = "stripe_payment_intent_id", length = 100)
+    private String stripePaymentIntentId;
 
     // ── Stripe ───────────────────────────────────────────────────────
     // PaymentIntent ID của Stripe (pi_xxx), liên kết với bảng stripe_order

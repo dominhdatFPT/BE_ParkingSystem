@@ -13,14 +13,15 @@ import com.swp.parking.model.FeePackagePriceHistory;
 import com.swp.parking.model.FeeSubscription;
 import com.swp.parking.model.FeeSubscriptionInvoice;
 import com.swp.parking.model.StripeOrder;
-import com.swp.parking.model.VNPayOrder;
 import com.swp.parking.model.Vehicle;
 import com.swp.parking.model.enums.InvoiceStatus;
+import com.swp.parking.model.enums.StripeOrderStatus;
 import com.swp.parking.model.enums.SubscriptionStatus;
 import com.swp.parking.repository.FeePackagePriceHistoryRepository;
 import com.swp.parking.repository.FeePackageRepository;
 import com.swp.parking.repository.FeeSubscriptionInvoiceRepository;
 import com.swp.parking.repository.FeeSubscriptionRepository;
+import com.swp.parking.repository.StripeOrderRepository;
 import com.swp.parking.repository.VehicleRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -35,8 +36,8 @@ import java.util.stream.Collectors;
 /**
  * Service duy nhất quản lý toàn bộ vòng đời thẻ tháng:
  *   1. Danh sách xe của user (để chọn khi đăng ký)
- *   2. Đăng ký thẻ tháng → tạo link thanh toán VNPay
- *   3. Kích hoạt subscription khi VNPay IPN xác nhận thành công
+ *   2. Đăng ký thẻ tháng → tạo PaymentIntent Stripe
+ *   3. Kích hoạt subscription khi Stripe xác nhận thanh toán thành công
  *   4. Hủy subscription theo ID
  *   5. Hủy tự động gia hạn (cancel auto-renew)
  *   6. Xem lịch sử thẻ tháng của user
@@ -52,8 +53,8 @@ public class SubscriptionService {
     private final FeePackagePriceHistoryRepository priceHistoryRepository;
     private final VehicleRepository vehicleRepository;
     private final CryptoService cryptoService;
-    private final VNPayService vnPayService;
     private final StripeService stripeService;
+    private final StripeOrderRepository stripeOrderRepository;
 
     // ─────────────────────────────────────────────────────────────────
     // 1. Danh sách xe của user
@@ -88,113 +89,7 @@ public class SubscriptionService {
     // ─────────────────────────────────────────────────────────────────
 
     /**
-     * Tạo subscription {@code PENDING_PAYMENT} rồi gọi VNPay lấy link thanh toán.
-     * <ol>
-     *   <li>Xác minh xe thuộc user.</li>
-     *   <li>Kiểm tra xe chưa có subscription ACTIVE.</li>
-     *   <li>Lấy gói + giá hiện hành.</li>
-     *   <li>Lưu subscription + invoice kỳ đầu.</li>
-     *   <li>Gọi VNPay tạo payment URL → FE redirect sang trang thanh toán VNPay.</li>
-     * </ol>
-     *
-     * @param clientIp IP người dùng (bắt buộc theo VNPay spec)
-     */
-    @Transactional
-    public RegisterSubscriptionResponse registerSubscription(Long userId,
-                                                             SubscriptionRegisterRequest request,
-                                                             String clientIp) {
-        // Xác minh quyền sở hữu xe
-        if (!vehicleRepository.existsByIdAndCustomer_User_Id(request.getVehicleId(), userId)) {
-            throw new AppException(HttpStatus.FORBIDDEN, "Phương tiện không thuộc về tài khoản của bạn");
-        }
-        Vehicle vehicle = vehicleRepository.findById(request.getVehicleId())
-                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy phương tiện"));
-
-        // Tự động hủy TẤT CẢ giao dịch PENDING_PAYMENT cũ của xe này trước khi tạo mới
-        List<FeeSubscription> pendingList = subscriptionRepository
-                .findAllByVehicle_IdAndStatus(request.getVehicleId(), SubscriptionStatus.PENDING_PAYMENT);
-        pendingList.forEach(pending -> {
-            pending.setStatus(SubscriptionStatus.CANCELLED);
-            subscriptionRepository.save(pending);
-            log.info("Auto-cancelled pending subscription {} trước khi tạo mới", pending.getId());
-        });
-
-        // Chặn đăng ký trùng khi xe đã có thẻ tháng đang ACTIVE
-        subscriptionRepository.findByVehicle_IdAndStatus(request.getVehicleId(), SubscriptionStatus.ACTIVE)
-                .ifPresent(existing -> {
-                    throw new AppException(HttpStatus.CONFLICT,
-                            "Phương tiện đã có thẻ tháng đang hoạt động, hết hạn: " + existing.getEndDate());
-                });
-
-        // Lấy gói user đã chọn
-        FeePackage feePackage = packageRepository.findById(request.getPlanId())
-                .orElseThrow(() -> new ResourceNotFoundException("Gói đăng ký không tồn tại"));
-        if (!Boolean.TRUE.equals(feePackage.getIsActive())) {
-            throw new AppException(HttpStatus.BAD_REQUEST, "Gói đăng ký này hiện không khả dụng");
-        }
-
-        // Lấy giá hiện hành (bản ghi chưa đóng: effectiveTo IS NULL)
-        FeePackagePriceHistory priceHistory = priceHistoryRepository
-                .findFirstByFeePackage_IdAndEffectiveToIsNullOrderByEffectiveFromDesc(feePackage.getId())
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        "Không tìm thấy giá hiện hành cho gói: " + feePackage.getId()));
-
-        // Tạo subscription ở trạng thái chờ thanh toán
-        FeeSubscription subscription = FeeSubscription.builder()
-                .vehicle(vehicle)
-                .feePackage(feePackage)
-                .priceHistory(priceHistory)
-                .amountToPay(priceHistory.getPrice())
-                .isAutoRenew(request.isAutoRenew())
-                .status(SubscriptionStatus.PENDING_PAYMENT)
-                .build();
-        subscription = subscriptionRepository.save(subscription);
-
-        String orderInfo = feePackage.getName() + " – Thẻ tháng bãi đỗ xe";
-
-        // Tạo hóa đơn kỳ đầu
-        FeeSubscriptionInvoice invoice = FeeSubscriptionInvoice.builder()
-                .feeSubscription(subscription)
-                .amount(priceHistory.getPrice())
-                .status(InvoiceStatus.PENDING)
-                .type("INITIAL")
-                .build();
-        invoice = invoiceRepository.save(invoice);
-
-        // Tạo link thanh toán VNPay
-        long amountLong = priceHistory.getPrice().longValue();
-        VNPayOrder vnPayOrder = vnPayService.createPaymentUrl(
-                userId,
-                subscription.getId(),
-                invoice.getId(),
-                amountLong,
-                orderInfo,
-                clientIp);
-
-        // Lưu txnRef vào invoice để trace sau này
-        invoice.setVnpTxnRef(vnPayOrder.getTxnRef());
-        invoiceRepository.save(invoice);
-
-        log.info("Subscription {} (gói: {}) → PENDING_PAYMENT, vnpTxnRef={}",
-                subscription.getId(), feePackage.getName(), vnPayOrder.getTxnRef());
-
-        return RegisterSubscriptionResponse.builder()
-                .subscriptionId(subscription.getId())
-                .invoiceId(invoice.getId())
-                .vnpTxnRef(vnPayOrder.getTxnRef())
-                .paymentUrl(vnPayOrder.getPaymentUrl())
-                .expiredAt(vnPayOrder.getExpiredAt())
-                .message("Nhấn 'Thanh toán' để chuyển sang trang VNPay. Sau khi thanh toán, bạn sẽ được chuyển về tự động.")
-                .build();
-    }
-
-    // ─────────────────────────────────────────────────────────────────
-    // 2b. Đăng ký thẻ tháng qua Stripe
-    // ─────────────────────────────────────────────────────────────────
-
-    /**
      * Tạo subscription PENDING_PAYMENT rồi gọi Stripe tạo PaymentIntent.
-     * Luồng tương tự {@link #registerSubscription} nhưng thay VNPay bằng Stripe.
      *
      * <p>FE sẽ dùng {@code clientSecret} trong response để gọi
      * {@code stripe.confirmCardPayment(clientSecret)} — user nhập thẻ trực tiếp
@@ -217,6 +112,7 @@ public class SubscriptionService {
         pendingList.forEach(pending -> {
             pending.setStatus(SubscriptionStatus.CANCELLED);
             subscriptionRepository.save(pending);
+            markPendingInvoicesFailed(pending.getId(), "Da huy do tao dang ky moi");
             log.info("Stripe: auto-cancelled pending subscription {} trước khi tạo mới", pending.getId());
         });
 
@@ -283,6 +179,48 @@ public class SubscriptionService {
                 .build();
     }
 
+    @Transactional
+    public RegisterSubscriptionStripeResponse createInvoiceStripePayment(Long userId, Long invoiceId) {
+        FeeSubscriptionInvoice invoice = invoiceRepository.findById(invoiceId)
+                .orElseThrow(() -> new ResourceNotFoundException("Khong tim thay hoa don: " + invoiceId));
+        FeeSubscription subscription = invoice.getFeeSubscription();
+
+        if (!vehicleRepository.existsByIdAndCustomer_User_Id(subscription.getVehicle().getId(), userId)) {
+            throw new AppException(HttpStatus.FORBIDDEN, "Ban khong co quyen thanh toan hoa don nay");
+        }
+        if (!InvoiceStatus.PENDING.equals(invoice.getStatus())
+                || !SubscriptionStatus.PENDING_PAYMENT.equals(subscription.getStatus())) {
+            throw new AppException(HttpStatus.CONFLICT, "Hoa don khong con o trang thai cho thanh toan");
+        }
+
+        String description = subscription.getFeePackage().getName() + " - The thang bai do xe (Stripe)";
+        long amountLong = invoice.getAmount().longValue();
+
+        StripeOrder stripeOrder = stripeOrderRepository
+                .findFirstByInvoiceIdOrderByCreatedAtDesc(invoice.getId())
+                .filter(order -> StripeOrderStatus.PENDING.equals(order.getStatus())
+                        && order.getExpiredAt() != null
+                        && order.getExpiredAt().isAfter(LocalDateTime.now()))
+                .orElseGet(() -> stripeService.createPaymentIntent(
+                        userId, subscription.getId(), invoice.getId(), amountLong, description));
+
+        if (invoice.getStripePaymentIntentId() == null
+                || !invoice.getStripePaymentIntentId().equals(stripeOrder.getPaymentIntentId())) {
+            invoice.setStripePaymentIntentId(stripeOrder.getPaymentIntentId());
+            invoiceRepository.save(invoice);
+        }
+
+        return RegisterSubscriptionStripeResponse.builder()
+                .subscriptionId(subscription.getId())
+                .invoiceId(invoice.getId())
+                .paymentIntentId(stripeOrder.getPaymentIntentId())
+                .clientSecret(stripeOrder.getClientSecret())
+                .amount(stripeOrder.getAmount())
+                .currency(stripeOrder.getCurrency())
+                .message("Nhap thong tin the de hoan tat thanh toan qua Stripe.")
+                .build();
+    }
+
     // ─────────────────────────────────────────────────────────────────
     // 3b. Kích hoạt subscription qua Stripe webhook
     // ─────────────────────────────────────────────────────────────────
@@ -330,14 +268,14 @@ public class SubscriptionService {
     }
 
     // ─────────────────────────────────────────────────────────────────
-    // 4. Kích hoạt subscription qua VNPay IPN (tự động)
+    // 4. Kích hoạt subscription sau khi thanh toán ngoài Stripe
     // ─────────────────────────────────────────────────────────────────
 
     /**
-     * Được gọi từ VNPayController sau khi IPN xác nhận thanh toán thành công.
+     * Dùng cho các luồng thanh toán được xác nhận thủ công như MoMo.
      * Chuyển subscription PENDING_PAYMENT → ACTIVE và invoice PENDING → SUCCESS.
      *
-     * @param transactionNo Mã giao dịch VNPay (vnp_TransactionNo)
+     * @param transactionNo Mã giao dịch từ kênh thanh toán.
      */
     @Transactional
     public RegisterSubscriptionResponse registerSubscriptionPaidCash(Long userId,
@@ -353,6 +291,7 @@ public class SubscriptionService {
         pendingList.forEach(pending -> {
             pending.setStatus(SubscriptionStatus.CANCELLED);
             subscriptionRepository.save(pending);
+            markPendingInvoicesFailed(pending.getId(), "Da huy do tao dang ky moi");
             log.info("Auto-cancelled pending subscription {} before cash-paid subscription", pending.getId());
         });
 
@@ -406,7 +345,7 @@ public class SubscriptionService {
     }
 
     @Transactional
-    public void activateSubscriptionVnpay(Long subscriptionId, String transactionNo) {
+    public void activateSubscriptionAfterPayment(Long subscriptionId, String transactionNo) {
         FeeSubscription subscription = subscriptionRepository.findById(subscriptionId)
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "Không tìm thấy subscription: " + subscriptionId));
@@ -431,11 +370,11 @@ public class SubscriptionService {
                 .findFirst()
                 .ifPresent(inv -> {
                     inv.setStatus(InvoiceStatus.SUCCESS);
-                    inv.setVnpTransactionNo(transactionNo);
+                    inv.setMessage("Thanh toán thành công. TransactionId: " + transactionNo);
                     invoiceRepository.save(inv);
                 });
 
-        log.info("Subscription {} → ACTIVE ({} tháng) qua VNPay, hết hạn: {}",
+        log.info("Subscription {} → ACTIVE ({} tháng), hết hạn: {}",
                 subscriptionId, months, subscription.getEndDate());
     }
 
@@ -481,8 +420,19 @@ public class SubscriptionService {
             if (SubscriptionStatus.PENDING_PAYMENT.equals(sub.getStatus())) {
                 sub.setStatus(SubscriptionStatus.CANCELLED);
                 subscriptionRepository.save(sub);
+                markPendingInvoicesFailed(subscriptionId, "Da huy phien thanh toan");
             }
         });
+    }
+
+    private void markPendingInvoicesFailed(Long subscriptionId, String message) {
+        invoiceRepository.findByFeeSubscriptionIdOrderByCreatedAtDesc(subscriptionId).stream()
+                .filter(invoice -> InvoiceStatus.PENDING.equals(invoice.getStatus()))
+                .forEach(invoice -> {
+                    invoice.setStatus(InvoiceStatus.FAILED);
+                    invoice.setMessage(message);
+                    invoiceRepository.save(invoice);
+                });
     }
 
     // ─────────────────────────────────────────────────────────────────
@@ -529,13 +479,15 @@ public class SubscriptionService {
         return invoiceRepository.findAllByUserId(userId).stream()
                 .map(inv -> SubscriptionInvoiceResponse.builder()
                         .id(inv.getId())
-                        .vnpTxnRef(inv.getVnpTxnRef())
-                        .vnpTransactionNo(inv.getVnpTransactionNo())
+                        .subscriptionId(inv.getFeeSubscription().getId())
                         .momoOrderId(inv.getMomoOrderId())
                         .momoTransId(inv.getMomoTransId())
                         .stripePaymentIntentId(inv.getStripePaymentIntentId())
                         .amount(inv.getAmount())
                         .status(inv.getStatus().name())
+                        .subscriptionStatus(inv.getFeeSubscription().getStatus().name())
+                        .payable(InvoiceStatus.PENDING.equals(inv.getStatus())
+                                && SubscriptionStatus.PENDING_PAYMENT.equals(inv.getFeeSubscription().getStatus()))
                         .type(inv.getType())
                         .message(inv.getMessage())
                         .licensePlate(inv.getFeeSubscription().getVehicle().getLicensePlate())

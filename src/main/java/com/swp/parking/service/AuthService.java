@@ -23,13 +23,18 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Locale;
 import java.util.UUID;
+import java.util.regex.Pattern;
 
 @Service
 @RequiredArgsConstructor
 @Transactional
 @Slf4j
 public class AuthService {
+
+    private static final Pattern GMAIL_EMAIL_PATTERN =
+            Pattern.compile(com.swp.parking.validation.ValidationPatterns.GMAIL_EMAIL, Pattern.CASE_INSENSITIVE);
 
     private final UserRepository userRepository;
     private final CustomerRepository customerRepository;
@@ -38,7 +43,8 @@ public class AuthService {
     private final RefreshTokenService refreshTokenService;
 
     public AuthResponse login(LoginRequest request) {
-        User user = userRepository.findByEmail(request.getEmail())
+        String email = normalizeEmail(request.getEmail());
+        User user = userRepository.findByEmailIgnoreCase(email)
                 .orElseThrow(() -> new AppException(HttpStatus.NOT_FOUND, "Email not found"));
 
         if (user.getPassword() == null || user.getPassword().isBlank()) {
@@ -66,13 +72,14 @@ public class AuthService {
     }
 
     public AuthResponse register(RegisterRequest request) {
-        if (userRepository.existsByEmail(request.getEmail())) {
+        String email = normalizeEmail(request.getEmail());
+        if (userRepository.existsByEmailIgnoreCase(email)) {
             throw new AppException(HttpStatus.CONFLICT, "Email already exists");
         }
 
         User user = User.builder()
-                .fullName(request.getFullName())
-                .email(request.getEmail())
+                .fullName(request.getFullName().trim())
+                .email(email)
                 .password(passwordEncoder.encode(request.getPassword()))
                 .role(UserRole.USER)
                 .build();
@@ -102,7 +109,7 @@ public class AuthService {
                     "Firebase is not configured on the server");
         }
 
-        String email = decodedToken.getEmail();
+        String email = normalizeEmail(decodedToken.getEmail());
         if (email == null || email.isBlank()) {
             throw new AppException(HttpStatus.BAD_REQUEST,
                     "Google account does not expose an email address");
@@ -121,7 +128,7 @@ public class AuthService {
     }
 
     private User findOrCreateGoogleUser(String email, String fullName) {
-        return userRepository.findByEmail(email)
+        return userRepository.findByEmailIgnoreCase(email)
                 .orElseGet(() -> {
                     String safeName = (fullName == null || fullName.isBlank())
                             ? email.split("@")[0]
@@ -193,5 +200,16 @@ public class AuthService {
                 .orElseGet(() -> userRepository.findById(userId)
                         .map(User::getRole)
                         .orElse(UserRole.USER));
+    }
+
+    private String normalizeEmail(String email) {
+        String normalized = email == null ? null : email.trim().toLowerCase(Locale.ROOT);
+        if (normalized == null || normalized.isBlank()) {
+            return normalized;
+        }
+        if (!GMAIL_EMAIL_PATTERN.matcher(normalized).matches()) {
+            throw new AppException(HttpStatus.BAD_REQUEST, "Email must be a Gmail address");
+        }
+        return normalized;
     }
 }

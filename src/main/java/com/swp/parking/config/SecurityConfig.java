@@ -47,21 +47,13 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .requestMatchers("/api/v1/auth/**").permitAll()
 
-                        // VNPay webhooks — phải public vì VNPay server gọi trực tiếp (không có JWT)
-                        .requestMatchers(HttpMethod.GET, "/api/payments/vnpay/ipn").permitAll()
-                        .requestMatchers(HttpMethod.GET, "/api/payments/vnpay/return").permitAll()
-                        // VNPay order status — FE polling sau redirect, có thể không còn session hợp lệ
-                        .requestMatchers(HttpMethod.GET, "/api/payments/vnpay/orders/*/status").permitAll()
-
                         // Stripe webhook — Stripe server gọi trực tiếp, không có JWT
                         .requestMatchers(HttpMethod.POST, "/api/payments/stripe/webhook").permitAll()
                         // Stripe order status — FE polling sau confirmCardPayment
                         .requestMatchers(HttpMethod.GET, "/api/payments/stripe/orders/*/status").permitAll()
                         // Stripe confirm — FE gọi ngay sau success để kích hoạt subscription (fallback webhook)
                         .requestMatchers(HttpMethod.POST, "/api/payments/stripe/orders/*/confirm").permitAll()
-
-                        // Dev/test endpoints — mock VNPay (không active trên prod do @Profile)
-                        .requestMatchers("/api/dev/**").permitAll()
+                        .requestMatchers("/api/v1/visitor-checkout/**").permitAll()
 
                         // Public read endpoints
                         .requestMatchers(HttpMethod.GET, "/api/v1/parking-area-summary/**").permitAll()

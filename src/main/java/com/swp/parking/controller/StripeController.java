@@ -4,6 +4,7 @@ import com.swp.parking.dto.response.ApiResponse;
 import com.swp.parking.model.StripeOrder;
 import com.swp.parking.service.StripeService;
 import com.swp.parking.service.SubscriptionService;
+import com.swp.parking.service.VisitorCheckoutService;
 import com.swp.parking.model.enums.StripeOrderStatus;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -28,6 +29,7 @@ public class StripeController {
 
     private final StripeService stripeService;
     private final SubscriptionService subscriptionService;
+    private final VisitorCheckoutService visitorCheckoutService;
 
     /**
      * FE gọi ngay sau confirmCardPayment thành công — dự phòng khi webhook chưa đến.
@@ -46,6 +48,11 @@ public class StripeController {
                         order.getSubscriptionId(), order.getStripeChargeId());
                 log.info("confirmOrder: kích hoạt subscription {} qua PaymentIntent {}",
                         order.getSubscriptionId(), paymentIntentId);
+            } else if (StripeOrderStatus.SUCCEEDED.equals(order.getStatus())
+                    && order.getParkingOrderId() != null) {
+                visitorCheckoutService.markParkingOrderPaid(order);
+                log.info("confirmOrder: parking order {} paid by PaymentIntent {}",
+                        order.getParkingOrderId(), paymentIntentId);
             }
 
             order.setClientSecret(null);
@@ -101,6 +108,11 @@ public class StripeController {
                             order.getStripeChargeId());
                     log.info("Stripe webhook: đã kích hoạt subscription {} qua PaymentIntent {}",
                             order.getSubscriptionId(), order.getPaymentIntentId());
+                } else if (StripeOrderStatus.SUCCEEDED.equals(order.getStatus())
+                        && order.getParkingOrderId() != null) {
+                    visitorCheckoutService.markParkingOrderPaid(order);
+                    log.info("Stripe webhook: parking order {} paid by PaymentIntent {}",
+                            order.getParkingOrderId(), order.getPaymentIntentId());
                 }
             });
 

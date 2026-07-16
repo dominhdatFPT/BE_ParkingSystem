@@ -17,6 +17,8 @@ public interface AccountUserRepository extends JpaRepository<User, Long> {
 
     boolean existsByEmail(String email);
 
+    boolean existsByEmailIgnoreCase(String email);
+
     @Query("""
             SELECT new com.swp.parking.dto.response.AccountUserResponse(
                 u.id, u.fullName, u.email, u.phone, u.avatarUrl, u.status, u.role, u.createdAt

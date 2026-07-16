@@ -12,11 +12,18 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Locale;
+import java.util.regex.Pattern;
 
 @Service
 @RequiredArgsConstructor
 @Transactional
 public class UserService {
+
+    private static final Pattern GMAIL_EMAIL_PATTERN =
+            Pattern.compile(com.swp.parking.validation.ValidationPatterns.GMAIL_EMAIL, Pattern.CASE_INSENSITIVE);
+    private static final Pattern STRONG_PASSWORD_PATTERN =
+            Pattern.compile(com.swp.parking.validation.ValidationPatterns.STRONG_PASSWORD);
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
@@ -42,11 +49,15 @@ public class UserService {
     }
 
     public UserResponse createUser(User user) {
-        if (userRepository.existsByEmail(user.getEmail())) {
+        String email = normalizeAndValidateEmail(user.getEmail());
+        if (userRepository.existsByEmailIgnoreCase(email)) {
             throw new AppException(HttpStatus.CONFLICT, "Email already exists");
         }
-        if (user.getPassword() != null) {
-            user.setPassword(passwordEncoder.encode(user.getPassword()));
+        validatePassword(user.getPassword());
+        user.setPassword(passwordEncoder.encode(user.getPassword()));
+        user.setEmail(email);
+        if (user.getFullName() != null) {
+            user.setFullName(user.getFullName().trim());
         }
         return mapToResponse(userRepository.save(user));
     }
@@ -55,8 +66,15 @@ public class UserService {
         User user = userRepository.findById(id)
                 .orElseThrow(() -> new AppException(HttpStatus.NOT_FOUND, "User not found"));
 
-        user.setFullName(updatedUser.getFullName());
-        user.setEmail(updatedUser.getEmail());
+        String email = normalizeAndValidateEmail(updatedUser.getEmail());
+        userRepository.findByEmailIgnoreCase(email)
+                .filter(existing -> !existing.getId().equals(id))
+                .ifPresent(existing -> {
+                    throw new AppException(HttpStatus.CONFLICT, "Email already exists");
+                });
+
+        user.setFullName(updatedUser.getFullName() == null ? null : updatedUser.getFullName().trim());
+        user.setEmail(email);
         user.setRole(updatedUser.getRole());
 
         return mapToResponse(userRepository.save(user));
@@ -96,5 +114,26 @@ public class UserService {
                 .orElseGet(() -> userRepository.findById(userId)
                         .map(User::getRole)
                         .orElse(UserRole.USER));
+    }
+
+    private String normalizeAndValidateEmail(String email) {
+        String normalized = email == null ? null : email.trim().toLowerCase(Locale.ROOT);
+        if (normalized == null || normalized.isBlank()) {
+            throw new AppException(HttpStatus.BAD_REQUEST, "Email is required");
+        }
+        if (!GMAIL_EMAIL_PATTERN.matcher(normalized).matches()) {
+            throw new AppException(HttpStatus.BAD_REQUEST, "Email must be a Gmail address");
+        }
+        return normalized;
+    }
+
+    private void validatePassword(String password) {
+        if (password == null || password.isBlank()) {
+            throw new AppException(HttpStatus.BAD_REQUEST, "Password is required");
+        }
+        if (!STRONG_PASSWORD_PATTERN.matcher(password).matches()) {
+            throw new AppException(HttpStatus.BAD_REQUEST,
+                    "Password must be at least 8 characters and contain at least one letter and one number");
+        }
     }
 }

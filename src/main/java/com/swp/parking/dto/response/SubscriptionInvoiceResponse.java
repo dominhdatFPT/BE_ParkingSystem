@@ -12,9 +12,7 @@ public class SubscriptionInvoiceResponse {
 
     private Long id;
 
-    // ── VNPay (kênh thanh toán hiện tại) ────────────────────────────
-    private String vnpTxnRef;
-    private String vnpTransactionNo;
+    private Long subscriptionId;
 
     // ── MoMo (legacy — dữ liệu cũ) ──────────────────────────────────
     private String momoOrderId;
@@ -27,6 +25,10 @@ public class SubscriptionInvoiceResponse {
 
     /** PENDING | SUCCESS | FAILED */
     private String status;
+
+    private String subscriptionStatus;
+
+    private Boolean payable;
 
     /** INITIAL | RENEWAL */
     private String type;

@@ -38,6 +38,8 @@ public class OperationsDashboardResponse {
         private long activeMotorbikes;
         private long openIncidents;
         private BigDecimal revenueToday;
+        private BigDecimal subscriptionRevenueToday;
+        private BigDecimal visitorRevenueToday;
         private long totalSlots;
         private int occupancyRate;
     }

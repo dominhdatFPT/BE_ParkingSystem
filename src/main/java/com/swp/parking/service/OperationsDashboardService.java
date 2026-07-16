@@ -71,6 +71,8 @@ public class OperationsDashboardService {
                 .activeMotorbikes(dashboardMetrics.activeMotorbikes())
                 .openIncidents(dashboardMetrics.openIncidents())
                 .revenueToday(dashboardMetrics.revenueToday())
+                .subscriptionRevenueToday(dashboardMetrics.subscriptionRevenueToday())
+                .visitorRevenueToday(dashboardMetrics.visitorRevenueToday())
                 .totalSlots(totalSlots)
                 .occupancyRate(totalSlots > 0 ? (int) Math.round((vehiclesInParking * 100.0) / totalSlots) : 0)
                 .build();
@@ -134,11 +136,23 @@ public class OperationsDashboardService {
                         COALESCE(SUM(po.calculated_fee) FILTER (
                             WHERE po.calculated_fee IS NOT NULL
                               AND po.exit_time >= p.start_date AND po.exit_time < p.end_date
-                        ), 0) AS revenue_today
+                        ), 0) AS revenue_today,
+                        COALESCE(SUM(po.calculated_fee) FILTER (
+                            WHERE po.calculated_fee IS NOT NULL
+                              AND po.exit_time >= p.start_date AND po.exit_time < p.end_date
+                              AND %2$s = 'VISITOR'
+                        ), 0) AS visitor_revenue_today
                     FROM parking_orders po
                     CROSS JOIN params p
                     LEFT JOIN vehicles v ON v.vehicle_id = po.vehicle_id
                     LEFT JOIN vehicle_types vt ON vt.vehicle_type_id = v.vehicle_type_id
+                ),
+                subscription_revenue AS (
+                    SELECT COALESCE(SUM(amount), 0) AS subscription_revenue_today
+                    FROM fee_subscription_invoice fsi
+                    CROSS JOIN params p
+                    WHERE fsi.status = 'SUCCESS'
+                      AND fsi.updated_at >= p.start_date AND fsi.updated_at < p.end_date
                 ),
                 visitor_card_metrics AS (
                     SELECT COUNT(*) AS visitor_cards,
@@ -147,8 +161,9 @@ public class OperationsDashboardService {
                 )
                 SELECT *
                 FROM order_metrics
+                CROSS JOIN subscription_revenue
                 CROSS JOIN visitor_card_metrics
-                """.formatted(vehicleTypeExpression());
+                """.formatted(vehicleTypeExpression(), customerTypeExpression());
 
         try {
             return jdbcTemplate.queryForObject(sql, (rs, rowNum) -> new DashboardMetricsData(
@@ -162,7 +177,9 @@ public class OperationsDashboardService {
                     rs.getLong("active_cars"),
                     rs.getLong("active_motorbikes"),
                     rs.getLong("open_incidents"),
-                    rs.getBigDecimal("revenue_today"),
+                    zeroIfNull(rs.getBigDecimal("revenue_today")).add(zeroIfNull(rs.getBigDecimal("subscription_revenue_today"))),
+                    rs.getBigDecimal("subscription_revenue_today"),
+                    rs.getBigDecimal("visitor_revenue_today"),
                     rs.getLong("visitor_cards"),
                     rs.getLong("available_visitor_cards")
             ), date, date.plusDays(1));
@@ -179,7 +196,9 @@ public class OperationsDashboardService {
                     countActiveVehiclesByType("CAR"),
                     countActiveVehiclesByType("MOTORBIKE"),
                     countOpenIncidents(),
-                    sumRevenueToday(date),
+                    sumVisitorRevenueToday(date).add(sumSubscriptionRevenueToday(date)),
+                    sumSubscriptionRevenueToday(date),
+                    sumVisitorRevenueToday(date),
                     countVisitorCards(),
                     countAvailableVisitorCards()
             );
@@ -436,6 +455,41 @@ public class OperationsDashboardService {
         }
     }
 
+    private BigDecimal sumVisitorRevenueToday(LocalDate date) {
+        String sql = """
+                SELECT COALESCE(SUM(calculated_fee), 0)
+                FROM parking_orders po
+                WHERE calculated_fee IS NOT NULL
+                  AND exit_time >= ?
+                  AND exit_time < ?
+                  AND %s = 'VISITOR'
+                """.formatted(customerTypeExpression());
+        try {
+            BigDecimal value = jdbcTemplate.queryForObject(sql, BigDecimal.class, date, date.plusDays(1));
+            return value != null ? value : BigDecimal.ZERO;
+        } catch (DataAccessException ex) {
+            log.warn("Could not calculate visitor revenue: {}", ex.getMessage());
+            return sumRevenueToday(date);
+        }
+    }
+
+    private BigDecimal sumSubscriptionRevenueToday(LocalDate date) {
+        String sql = """
+                SELECT COALESCE(SUM(amount), 0)
+                FROM fee_subscription_invoice
+                WHERE status = 'SUCCESS'
+                  AND updated_at >= ?
+                  AND updated_at < ?
+                """;
+        try {
+            BigDecimal value = jdbcTemplate.queryForObject(sql, BigDecimal.class, date, date.plusDays(1));
+            return value != null ? value : BigDecimal.ZERO;
+        } catch (DataAccessException ex) {
+            log.warn("Could not calculate subscription revenue: {}", ex.getMessage());
+            return BigDecimal.ZERO;
+        }
+    }
+
     private List<OperationsDashboardResponse.TrafficPoint> readTrafficByHour(LocalDate date) {
         List<OperationsDashboardResponse.TrafficPoint> points = new ArrayList<>();
         for (int hour = 0; hour < 24; hour += 2) {
@@ -660,9 +714,22 @@ public class OperationsDashboardService {
     private String vehicleTypeExpression() {
         return """
                 CASE
-                    WHEN upper(COALESCE(vt.type_code, '')) LIKE 'MOTORBIKE%%'
-                      OR upper(COALESCE(vt.type_name, '')) LIKE '%%XE MÁY%%'
-                      OR upper(COALESCE(po.notes, '')) LIKE '%%VEHICLE_TYPE=MOTORBIKE%%'
+                    WHEN upper(COALESCE(po.notes, '')) LIKE '%%VEHICLE_TYPE=CAR%%'
+                    THEN 'CAR'
+                    WHEN upper(COALESCE(po.notes, '')) LIKE '%%VEHICLE_TYPE=MOTORBIKE%%'
+                    THEN 'MOTORBIKE'
+                    WHEN upper(COALESCE(vt.type_code, '')) LIKE 'CAR%%'
+                      OR upper(COALESCE(vt.type_name, '')) LIKE '%%CAR%%'
+                      OR upper(COALESCE(vt.type_name, '')) LIKE '%%O TO%%'
+                      OR upper(COALESCE(vt.type_name, '')) LIKE '%%OTO%%'
+                    THEN 'CAR'
+                    WHEN upper(COALESCE(vt.type_code, '')) LIKE 'MOTOR%%'
+                      OR upper(COALESCE(vt.type_code, '')) LIKE 'MOTO%%'
+                      OR upper(COALESCE(vt.type_name, '')) LIKE '%%MOTOR%%'
+                      OR upper(COALESCE(vt.type_name, '')) LIKE '%%MOTO%%'
+                      OR upper(COALESCE(vt.type_name, '')) LIKE '%%BIKE%%'
+                      OR upper(COALESCE(vt.type_name, '')) LIKE '%%XE MAY%%'
+                      OR upper(COALESCE(vt.type_name, '')) LIKE '%%XE M_Y%%'
                     THEN 'MOTORBIKE'
                     ELSE 'CAR'
                 END
@@ -777,7 +844,13 @@ public class OperationsDashboardService {
             long activeMotorbikes,
             long openIncidents,
             BigDecimal revenueToday,
+            BigDecimal subscriptionRevenueToday,
+            BigDecimal visitorRevenueToday,
             long visitorCards,
             long availableVisitorCards) {
+    }
+
+    private BigDecimal zeroIfNull(BigDecimal value) {
+        return value != null ? value : BigDecimal.ZERO;
     }
 }

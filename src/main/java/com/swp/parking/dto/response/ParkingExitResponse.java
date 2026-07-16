@@ -28,6 +28,7 @@ public class ParkingExitResponse {
     private String parkingStatus;
     private SubscriptionInfo subscription;
     private FeeInfo fee;
+    private PaymentInfo payment;
     private Boolean canConfirmExit;
     private String message;
 
@@ -55,7 +56,23 @@ public class ParkingExitResponse {
         private String description;
         private Integer firstBlockMinutes;
         private BigDecimal firstBlockFee;
+        private Integer nextBlockMinutes;
+        private BigDecimal nextBlockFee;
         private Integer additionalBlocks;
         private BigDecimal additionalFee;
+        private BigDecimal dailyCap;
+    }
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class PaymentInfo {
+        private String status;
+        private String method;
+        private BigDecimal paidAmount;
+        private LocalDateTime paidAt;
+        private String transactionReference;
+        private Boolean paidOnline;
     }
 }
