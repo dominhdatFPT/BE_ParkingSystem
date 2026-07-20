@@ -269,14 +269,27 @@ public class ParkingEntryService {
     }
 
     private Optional<Long> findVehicleTypeId(String vehicleType) {
-        String resolved = resolveVehicleTypeToken(vehicleType);
-        if ("MOTORBIKE".equals(resolved)) {
-            return Optional.of(1L);
+        String expectedCode = resolveVehicleTypeToken(vehicleType);
+        if (expectedCode.isBlank()) {
+            return Optional.empty();
         }
-        if ("CAR".equals(resolved)) {
-            return Optional.of(2L);
-        }
-        return Optional.empty();
+        List<VehicleTypeRef> vehicleTypes = jdbcTemplate.query("""
+                SELECT vehicle_type_id, type_code, type_name
+                FROM vehicle_types
+                ORDER BY vehicle_type_id
+                """, (rs, rowNum) -> new VehicleTypeRef(
+                rs.getLong("vehicle_type_id"),
+                rs.getString("type_code"),
+                rs.getString("type_name")
+        ));
+        return vehicleTypes.stream()
+                .filter(type -> expectedCode.equals(resolveVehicleTypeToken(type.typeCode())))
+                .map(VehicleTypeRef::id)
+                .findFirst()
+                .or(() -> vehicleTypes.stream()
+                        .filter(type -> expectedCode.equals(resolveVehicleTypeToken(type.typeName())))
+                        .map(VehicleTypeRef::id)
+                        .findFirst());
     }
 
     private boolean hasActiveOrder(String licensePlate) {
