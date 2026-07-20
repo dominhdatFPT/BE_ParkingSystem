@@ -611,6 +611,7 @@ public class ParkingEntryService {
             return "MOTORBIKE";
         }
         if (normalized.equals("CAR")
+                || normalized.startsWith("CAR")
                 || normalized.contains("AUTO")
                 || normalized.contains("O TO")
                 || normalized.contains("OTO")) {
