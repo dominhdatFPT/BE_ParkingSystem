@@ -8,6 +8,7 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -23,6 +24,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class ParkingExitService {
@@ -328,11 +330,15 @@ public class ParkingExitService {
 
     private ParkingExitResponse.FeeInfo calculateVisitorFee(
             ParkingExitRow row, LocalDateTime entryTime, LocalDateTime exitTime, long durationMinutes) {
-        FeeRate rate = findFeeRate(resolveFeeVehicleTypeId(row), row.getParkingId(), exitTime)
+        Long resolvedVehicleTypeId = resolveFeeVehicleTypeId(row);
+        log.info("[EXIT_DEBUG] resolvedVehicleTypeId={}, parkingId={}, exitTime={}", resolvedVehicleTypeId, row.getParkingId(), exitTime);
+        FeeRate rate = findFeeRate(resolvedVehicleTypeId, row.getParkingId(), exitTime)
                 .orElseThrow(() -> new AppException(
                         HttpStatus.CONFLICT,
                         "Chưa cấu hình bảng giá xe vãng lai cho loại xe này"
                 ));
+        log.info("[EXIT_DEBUG] feeRate: feeRateId={}, firstBlockMin={}, firstBlockFee={}, nextBlockMin={}, nextBlockFee={}",
+                rate.getFeeRateId(), rate.getFirstBlockMinutes(), rate.getFirstBlockFee(), rate.getNextBlockMinutes(), rate.getNextBlockFee());
 
         long remainingMinutes = Math.max(0, durationMinutes - rate.getFirstBlockMinutes());
         int additionalBlocks = remainingMinutes == 0 ? 0
@@ -438,8 +444,11 @@ public class ParkingExitService {
 
     private Long resolveFeeVehicleTypeId(ParkingExitRow row) {
         String noteType = vehicleTypeFromNotes(row.getNotes());
+        log.info("[EXIT_DEBUG] notes='{}', noteType='{}', row.vehicleTypeId={}", row.getNotes(), noteType, row.getVehicleTypeId());
         if (!noteType.isBlank()) {
-            return findVehicleTypeId(noteType).orElse(row.getVehicleTypeId());
+            Optional<Long> resolved = findVehicleTypeId(noteType);
+            log.info("[EXIT_DEBUG] findVehicleTypeId('{}') = {}", noteType, resolved);
+            return resolved.orElse(row.getVehicleTypeId());
         }
         return row.getVehicleTypeId();
     }
@@ -456,7 +465,9 @@ public class ParkingExitService {
                 rs.getString("type_name")
         ));
 
-        return vehicleTypes.stream()
+        log.info("[EXIT_DEBUG] findVehicleTypeId: expectedCode='{}', allTypes={}", expectedCode, vehicleTypes);
+
+        Optional<Long> result = vehicleTypes.stream()
                 .filter(type -> expectedCode.equals(resolveVehicleTypeToken(type.typeCode())))
                 .map(VehicleTypeRef::id)
                 .findFirst()
@@ -464,6 +475,8 @@ public class ParkingExitService {
                         .filter(type -> expectedCode.equals(resolveVehicleTypeToken(type.typeName())))
                         .map(VehicleTypeRef::id)
                         .findFirst());
+        log.info("[EXIT_DEBUG] findVehicleTypeId result={}", result);
+        return result;
     }
 
     private String resolveVehicleTypeToken(ParkingExitRow row) {
@@ -502,6 +515,7 @@ public class ParkingExitService {
             return "MOTORBIKE";
         }
         if (normalized.equals("CAR")
+                || normalized.startsWith("CAR")
                 || normalized.contains("AUTO")
                 || normalized.contains("O TO")
                 || normalized.contains("OTO")) {

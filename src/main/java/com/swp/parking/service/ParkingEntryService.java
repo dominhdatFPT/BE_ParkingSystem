@@ -8,6 +8,7 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -26,6 +27,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class ParkingEntryService {
@@ -267,7 +269,10 @@ public class ParkingEntryService {
     }
 
     private Optional<Long> findVehicleTypeId(String vehicleType) {
-        String expectedCode = "MOTORBIKE".equals(vehicleType) ? "MOTORBIKE" : "CAR";
+        String expectedCode = resolveVehicleTypeToken(vehicleType);
+        if (expectedCode.isBlank()) {
+            return Optional.empty();
+        }
         List<VehicleTypeRef> vehicleTypes = jdbcTemplate.query("""
                 SELECT vehicle_type_id, type_code, type_name
                 FROM vehicle_types
@@ -277,7 +282,6 @@ public class ParkingEntryService {
                 rs.getString("type_code"),
                 rs.getString("type_name")
         ));
-
         return vehicleTypes.stream()
                 .filter(type -> expectedCode.equals(resolveVehicleTypeToken(type.typeCode())))
                 .map(VehicleTypeRef::id)
@@ -575,12 +579,14 @@ public class ParkingEntryService {
     }
 
     private String normalizeVehicleType(String value, String licensePlate) {
+        log.info("normalizeVehicleType input: value='{}', licensePlate='{}'", value, licensePlate);
         String resolved = resolveVehicleTypeToken(value);
+        log.info("normalizeVehicleType resolved: '{}' → '{}'", value, resolved);
         if (!resolved.isBlank()) {
             return resolved;
         }
-        String plate = normalizePlate(licensePlate).replace(" ", "");
-        return plate.matches("^\\d{2}[A-Z]\\d[-.].*") ? "MOTORBIKE" : "CAR";
+
+        throw new AppException(HttpStatus.BAD_REQUEST, "Vui lòng chọn loại xe");
     }
 
     private String displayVehicleType(String value) {
@@ -592,6 +598,7 @@ public class ParkingEntryService {
 
     private String resolveVehicleTypeToken(String value) {
         String normalized = normalizeSearchText(value);
+        log.info("resolveVehicleTypeToken: raw='{}', normalized='{}'", value, normalized);
         if (normalized.isBlank()) {
             return "";
         }
@@ -599,15 +606,18 @@ public class ParkingEntryService {
                 || normalized.contains("MOTOR")
                 || normalized.contains("MOTO")
                 || normalized.contains("BIKE")
-                || normalized.contains("XE MAY")) {
+                || normalized.contains("XE MAY")
+                || normalized.contains("XEMAY")) {
             return "MOTORBIKE";
         }
         if (normalized.equals("CAR")
+                || normalized.startsWith("CAR")
                 || normalized.contains("AUTO")
                 || normalized.contains("O TO")
                 || normalized.contains("OTO")) {
             return "CAR";
         }
+        log.warn("resolveVehicleTypeToken: unrecognised vehicleType raw='{}', normalized='{}'", value, normalized);
         return "";
     }
 
