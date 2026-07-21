@@ -5,6 +5,7 @@ import com.swp.parking.dto.request.CreateAccountRequest;
 import com.swp.parking.dto.response.AccountUserResponse;
 import com.swp.parking.dto.response.ApiResponse;
 import com.swp.parking.service.AccountService;
+import com.swp.parking.service.FeeSubscriptionService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -29,6 +30,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class AccountController {
 
     private final AccountService accountService;
+    private final FeeSubscriptionService feeSubscriptionService;
 
     @GetMapping("/users")
     @PreAuthorize("hasAnyRole('ADMIN', 'STAFF')")
@@ -74,5 +76,19 @@ public class AccountController {
             @RequestParam(defaultValue = "10") int size) {
         Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
         return ApiResponse.success(accountService.getStaffs(role, status, keyword, pageable));
+    }
+
+    @PatchMapping("/subscriptions/{subscriptionId}/cancel")
+    @PreAuthorize("hasAnyRole('ADMIN', 'STAFF')")
+    public ApiResponse<Void> cancelSubscription(@PathVariable Long subscriptionId) {
+        feeSubscriptionService.cancelSubscriptionAdmin(subscriptionId);
+        return ApiResponse.success(null, "Hủy gói cước thành công");
+    }
+
+    @PostMapping("/subscriptions/{subscriptionId}/pay")
+    @PreAuthorize("hasAnyRole('ADMIN', 'STAFF')")
+    public ApiResponse<Void> paySubscription(@PathVariable Long subscriptionId) {
+        feeSubscriptionService.paySubscriptionAdmin(subscriptionId);
+        return ApiResponse.success(null, "Thanh toán gói cước thành công");
     }
 }

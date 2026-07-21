@@ -263,7 +263,8 @@ public class ParkingEntryService {
                     ACTIVE_SUBSCRIPTION_STATUSES.get(2),
                     ACTIVE_SUBSCRIPTION_STATUSES.get(3)
             ).stream().findFirst();
-        } catch (Exception ex) {
+
+         } catch (Exception ex) {
             return Optional.empty();
         }
     }
