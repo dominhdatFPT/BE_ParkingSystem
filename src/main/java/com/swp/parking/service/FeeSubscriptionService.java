@@ -121,6 +121,38 @@ public class FeeSubscriptionService {
         feeSubscriptionRepository.save(subscription);
     }
 
+    public void cancelSubscriptionAdmin(Long subscriptionId) {
+        log.info("Admin cancelling subscription id: {}", subscriptionId);
+
+        FeeSubscription subscription = feeSubscriptionRepository.findById(subscriptionId)
+                .orElseThrow(() -> new SubscriptionNotFoundException(subscriptionId));
+
+        if (subscription.getStatus() != SubscriptionStatus.ACTIVE
+                && subscription.getStatus() != SubscriptionStatus.PENDING_PAYMENT) {
+            throw new InvalidSubscriptionStatusException("Chi co the huy goi dang hoat dong hoac cho thanh toan");
+        }
+
+        subscription.setStatus(SubscriptionStatus.CANCELLED);
+        feeSubscriptionRepository.save(subscription);
+    }
+
+    public void paySubscriptionAdmin(Long subscriptionId) {
+        log.info("Admin paying subscription id: {}", subscriptionId);
+
+        FeeSubscription subscription = feeSubscriptionRepository.findById(subscriptionId)
+                .orElseThrow(() -> new SubscriptionNotFoundException(subscriptionId));
+
+        if (subscription.getStatus() != SubscriptionStatus.PENDING_PAYMENT) {
+            throw new InvalidSubscriptionStatusException("Chi co the thanh toan goi dang cho thanh toan");
+        }
+
+        LocalDateTime start = LocalDateTime.now();
+        subscription.setStatus(SubscriptionStatus.ACTIVE);
+        subscription.setStartDate(start);
+        subscription.setEndDate(start.plusMonths(subscription.getFeePackage().getDurationMonths()));
+        feeSubscriptionRepository.save(subscription);
+    }
+
     @Transactional(readOnly = true)
     public List<Map<String, Object>> getMySubscriptions(Long userId) {
         return feeSubscriptionRepository.findByUserId(userId).stream().map(subscription -> {

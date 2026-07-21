@@ -2,6 +2,7 @@ package com.swp.parking.service;
 
 import com.swp.parking.dto.request.CreateAccountRequest;
 import com.swp.parking.dto.response.AccountUserResponse;
+import com.swp.parking.dto.response.AccountVehicleInfo;
 import com.swp.parking.exception.AppException;
 import com.swp.parking.exception.DuplicateEmailException;
 import com.swp.parking.exception.InvalidRoleException;
@@ -21,6 +22,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -75,6 +77,16 @@ public class AccountService {
                                 ci -> ci
                         ));
 
+        List<AccountUserRepository.VehicleInfoProjection> vehicleProjections =
+                accountUserRepository.findVehicleInfoByUserIds(userIds);
+
+        Map<Long, List<AccountUserRepository.VehicleInfoProjection>> vehiclesByUser =
+                vehicleProjections.stream()
+                        .collect(Collectors.groupingBy(
+                                AccountUserRepository.VehicleInfoProjection::getUserId,
+                                Collectors.toList()
+                        ));
+
         for (AccountUserResponse user : users) {
             AccountUserRepository.CardInfoProjection info = cardInfoMap.get(user.getUserId());
             if (info != null) {
@@ -84,6 +96,28 @@ public class AccountService {
             } else {
                 user.setCardStatus("Chưa đăng ký gói");
             }
+
+            List<AccountUserRepository.VehicleInfoProjection> vehicleInfos =
+                    vehiclesByUser.getOrDefault(user.getUserId(), List.of());
+            List<AccountVehicleInfo> vehicleList = vehicleInfos.stream()
+                    .map(v -> AccountVehicleInfo.builder()
+                            .vehicleId(v.getVehicleId())
+                            .licensePlate(v.getLicensePlate())
+                            .brand(v.getBrand())
+                            .color(v.getColor())
+                            .vehicleTypeName(v.getVehicleTypeName())
+                            .vehicleTypeCode(v.getVehicleTypeCode())
+                            .subscriptionId(v.getSubscriptionId())
+                            .subscriptionStatus(v.getSubscriptionStatus())
+                            .amountToPay(v.getAmountToPay())
+                            .startDate(v.getStartDate())
+                            .endDate(v.getEndDate())
+                            .feePackageName(v.getFeePackageName())
+                            .paymentStatus(v.getPaymentStatus())
+                            .paymentStatusLabel(v.getPaymentStatusLabel())
+                            .build())
+                    .toList();
+            user.setVehicles(vehicleList);
         }
     }
 

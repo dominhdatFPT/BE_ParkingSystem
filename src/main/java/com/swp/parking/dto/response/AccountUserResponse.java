@@ -7,6 +7,8 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
 @Data
 @Builder
@@ -25,6 +27,9 @@ public class AccountUserResponse {
     private String cardStatus;
     private String feePackageName;
     private String licensePlate;
+
+    @Builder.Default
+    private List<AccountVehicleInfo> vehicles = new ArrayList<>();
 
     public AccountUserResponse(Long userId, String fullName, String email, String phone,
                                String avatarUrl, String status, UserRole role, LocalDateTime createdAt) {
