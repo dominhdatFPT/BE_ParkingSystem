@@ -8,6 +8,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 
 @Service
@@ -34,7 +36,7 @@ public class FeePackageService {
                 .vehicleTypeName(fp.getVehicleTypeName())
                 .name(fp.getName())
                 .durationMonths(fp.getDurationMonths())
-                .benefits(fp.getBenefits())
+                .benefits(splitBenefits(fp.getBenefits()))
                 .isPopular(fp.getIsPopular())
                 .isBestValue(fp.getIsBestValue())
                 .currentPrice(fp.getCurrentPrice())
@@ -42,5 +44,15 @@ public class FeePackageService {
                 .originalPrice(fp.getOriginalPrice())
                 .discountPercent(fp.getDiscountPercent())
                 .build();
+    }
+
+    private List<String> splitBenefits(String benefits) {
+        if (benefits == null || benefits.isBlank()) {
+            return Collections.emptyList();
+        }
+        return Arrays.stream(benefits.split(";"))
+                .map(String::trim)
+                .filter(s -> !s.isEmpty())
+                .toList();
     }
 }

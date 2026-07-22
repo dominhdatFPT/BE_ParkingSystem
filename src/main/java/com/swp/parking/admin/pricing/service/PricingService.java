@@ -2,7 +2,7 @@ package com.swp.parking.admin.pricing.service;
 
 import com.swp.parking.admin.pricing.dto.request.UpdatePriceRequest;
 import com.swp.parking.admin.pricing.dto.request.UpdateVisitorRateRequest;
-import com.swp.parking.admin.pricing.dto.response.FeePackageResponse;
+import com.swp.parking.dto.response.FeePackageResponse;
 import com.swp.parking.admin.pricing.dto.response.VisitorFeeRateResponse;
 import com.swp.parking.admin.pricing.model.VisitorFeeRate;
 import com.swp.parking.admin.pricing.repository.AdminFeePackagePriceHistoryRepository;
@@ -156,7 +156,7 @@ public class PricingService {
 
     private FeePackageResponse toFeePackageResponse(AdminFeePackageRepository.FeePackageWithCurrentPrice row) {
         return FeePackageResponse.builder()
-                .feePackageId(row.getFeePackageId())
+                .id(row.getFeePackageId())
                 .vehicleTypeId(row.getVehicleTypeId())
                 .vehicleTypeName(row.getVehicleTypeName())
                 .name(row.getName())
@@ -176,7 +176,7 @@ public class PricingService {
     private FeePackageResponse buildFeePackageResponse(FeePackage feePackage, FeePackagePriceHistory priceHistory) {
         VehicleType vehicleType = feePackage.getVehicleType();
         return FeePackageResponse.builder()
-                .feePackageId(feePackage.getId())
+                .id(feePackage.getId())
                 .vehicleTypeId(vehicleType != null ? vehicleType.getId() : null)
                 .vehicleTypeName(vehicleType != null ? vehicleType.getTypeName() : null)
                 .name(feePackage.getName())
