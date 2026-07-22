@@ -542,7 +542,12 @@ public class VehicleRegistrationService {
         reg.setReviewedBy(admin);
         reg.setReviewedAt(LocalDateTime.now());
 
-        return toResponse(registrationRepository.save(reg));
+        try {
+            return toResponse(registrationRepository.save(reg));
+        } catch (org.springframework.orm.ObjectOptimisticLockingFailureException ex) {
+            throw new AppException(HttpStatus.CONFLICT,
+                    "Đăng ký vừa được xử lý bởi người khác, vui lòng tải lại trang");
+        }
     }
 
     private void approveRegistration(VehicleRegistration reg, User reviewer, boolean feePackagePaidCash) {
@@ -602,6 +607,11 @@ public class VehicleRegistrationService {
 
         if (Boolean.TRUE.equals(reg.getIsDeleted())) {
             throw new AlreadyDeletedException("Xe này đã bị xóa trước đó");
+        }
+
+        if ("APPROVED".equals(reg.getStatus()) && reg.getVehicle() != null) {
+            throw new AppException(HttpStatus.CONFLICT,
+                    "Không thể xóa đăng ký đã duyệt khi xe vẫn tồn tại trong hệ thống. Vui lòng xóa xe trước.");
         }
 
         User reviewer = userRepository.findById(deletedByUserId)

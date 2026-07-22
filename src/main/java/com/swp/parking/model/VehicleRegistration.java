@@ -8,6 +8,7 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
+import jakarta.persistence.Version;
 import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -31,6 +32,10 @@ public class VehicleRegistration {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "registration_id")
     private Long id;
+
+    @Version
+    @Column(name = "version")
+    private Long version;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id")

@@ -2,7 +2,7 @@ package com.swp.parking.admin.pricing.controller;
 
 import com.swp.parking.admin.pricing.dto.request.UpdatePriceRequest;
 import com.swp.parking.admin.pricing.dto.request.UpdateVisitorRateRequest;
-import com.swp.parking.admin.pricing.dto.response.FeePackageResponse;
+import com.swp.parking.dto.response.FeePackageResponse;
 import com.swp.parking.admin.pricing.dto.response.VisitorFeeRateResponse;
 import com.swp.parking.admin.pricing.service.PricingService;
 import com.swp.parking.dto.response.ApiResponse;
