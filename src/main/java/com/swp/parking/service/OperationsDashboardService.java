@@ -133,17 +133,18 @@ public class OperationsDashboardService {
                             WHERE COALESCE(po.notes, '') <> ''
                               AND COALESCE(po.parking_status, '') IN ('ISSUE', 'EXCEPTION', 'OPEN', 'ACTIVE')
                         ) AS open_incidents,
-                        COALESCE(SUM(po.calculated_fee) FILTER (
-                            WHERE po.calculated_fee IS NOT NULL
-                              AND po.exit_time >= p.start_date AND po.exit_time < p.end_date
-                        ), 0) AS revenue_today,
-                        COALESCE(SUM(po.calculated_fee) FILTER (
-                            WHERE po.calculated_fee IS NOT NULL
-                              AND po.exit_time >= p.start_date AND po.exit_time < p.end_date
+                        COALESCE(SUM(COALESCE(pop.amount, po.calculated_fee)) FILTER (
+                            WHERE COALESCE(pop.amount, po.calculated_fee) IS NOT NULL
                               AND %2$s = 'VISITOR'
+                              AND (
+                                  (pop.paid_at >= p.start_date AND pop.paid_at < p.end_date)
+                                  OR (pop.paid_at IS NULL
+                                      AND po.exit_time >= p.start_date AND po.exit_time < p.end_date)
+                              )
                         ), 0) AS visitor_revenue_today
                     FROM parking_orders po
                     CROSS JOIN params p
+                    LEFT JOIN parking_order_payments pop ON pop.order_id = po.order_id
                     LEFT JOIN vehicles v ON v.vehicle_id = po.vehicle_id
                     LEFT JOIN vehicle_types vt ON vt.vehicle_type_id = v.vehicle_type_id
                 ),
@@ -166,25 +167,33 @@ public class OperationsDashboardService {
                 """.formatted(vehicleTypeExpression(), customerTypeExpression());
 
         try {
-            return jdbcTemplate.queryForObject(sql, (rs, rowNum) -> new DashboardMetricsData(
-                    rs.getLong("vehicles_in_parking"),
-                    rs.getLong("vehicles_in_today"),
-                    rs.getLong("vehicles_in_today_cars"),
-                    rs.getLong("vehicles_in_today_motorbikes"),
-                    rs.getLong("vehicles_out_today"),
-                    rs.getLong("vehicles_out_today_cars"),
-                    rs.getLong("vehicles_out_today_motorbikes"),
-                    rs.getLong("active_cars"),
-                    rs.getLong("active_motorbikes"),
-                    rs.getLong("open_incidents"),
-                    zeroIfNull(rs.getBigDecimal("revenue_today")).add(zeroIfNull(rs.getBigDecimal("subscription_revenue_today"))),
-                    rs.getBigDecimal("subscription_revenue_today"),
-                    rs.getBigDecimal("visitor_revenue_today"),
-                    rs.getLong("visitor_cards"),
-                    rs.getLong("available_visitor_cards")
-            ), date, date.plusDays(1));
+            return jdbcTemplate.queryForObject(sql, (rs, rowNum) -> {
+                BigDecimal visitorRevenueToday = zeroIfNull(rs.getBigDecimal("visitor_revenue_today"));
+                BigDecimal subscriptionRevenueToday = zeroIfNull(rs.getBigDecimal("subscription_revenue_today"));
+
+                return new DashboardMetricsData(
+                        rs.getLong("vehicles_in_parking"),
+                        rs.getLong("vehicles_in_today"),
+                        rs.getLong("vehicles_in_today_cars"),
+                        rs.getLong("vehicles_in_today_motorbikes"),
+                        rs.getLong("vehicles_out_today"),
+                        rs.getLong("vehicles_out_today_cars"),
+                        rs.getLong("vehicles_out_today_motorbikes"),
+                        rs.getLong("active_cars"),
+                        rs.getLong("active_motorbikes"),
+                        rs.getLong("open_incidents"),
+                        visitorRevenueToday.add(subscriptionRevenueToday),
+                        subscriptionRevenueToday,
+                        visitorRevenueToday,
+                        rs.getLong("visitor_cards"),
+                        rs.getLong("available_visitor_cards")
+                );
+            }, date, date.plusDays(1));
         } catch (DataAccessException ex) {
             log.warn("Could not read dashboard metrics in one query, using fallback queries: {}", ex.getMessage());
+            BigDecimal visitorRevenueToday = sumVisitorRevenueToday(date);
+            BigDecimal subscriptionRevenueToday = sumSubscriptionRevenueToday(date);
+
             return new DashboardMetricsData(
                     countActiveParkingOrders(),
                     countVehiclesInToday(date),
@@ -196,9 +205,9 @@ public class OperationsDashboardService {
                     countActiveVehiclesByType("CAR"),
                     countActiveVehiclesByType("MOTORBIKE"),
                     countOpenIncidents(),
-                    sumVisitorRevenueToday(date).add(sumSubscriptionRevenueToday(date)),
-                    sumSubscriptionRevenueToday(date),
-                    sumVisitorRevenueToday(date),
+                    visitorRevenueToday.add(subscriptionRevenueToday),
+                    subscriptionRevenueToday,
+                    visitorRevenueToday,
                     countVisitorCards(),
                     countAvailableVisitorCards()
             );
@@ -438,38 +447,32 @@ public class OperationsDashboardService {
                 """);
     }
 
-    private BigDecimal sumRevenueToday(LocalDate date) {
-        String sql = """
-                SELECT COALESCE(SUM(calculated_fee), 0)
-                FROM parking_orders
-                WHERE calculated_fee IS NOT NULL
-                  AND exit_time >= ?
-                  AND exit_time < ?
-                """;
-        try {
-            BigDecimal value = jdbcTemplate.queryForObject(sql, BigDecimal.class, date, date.plusDays(1));
-            return value != null ? value : BigDecimal.ZERO;
-        } catch (DataAccessException ex) {
-            log.warn("Could not calculate today revenue: {}", ex.getMessage());
-            return BigDecimal.ZERO;
-        }
-    }
-
     private BigDecimal sumVisitorRevenueToday(LocalDate date) {
         String sql = """
-                SELECT COALESCE(SUM(calculated_fee), 0)
+                SELECT COALESCE(SUM(COALESCE(pop.amount, po.calculated_fee)), 0)
                 FROM parking_orders po
-                WHERE calculated_fee IS NOT NULL
-                  AND exit_time >= ?
-                  AND exit_time < ?
+                LEFT JOIN parking_order_payments pop ON pop.order_id = po.order_id
+                WHERE COALESCE(pop.amount, po.calculated_fee) IS NOT NULL
                   AND %s = 'VISITOR'
+                  AND (
+                      (pop.paid_at >= ? AND pop.paid_at < ?)
+                      OR (pop.paid_at IS NULL
+                          AND po.exit_time >= ? AND po.exit_time < ?)
+                  )
                 """.formatted(customerTypeExpression());
         try {
-            BigDecimal value = jdbcTemplate.queryForObject(sql, BigDecimal.class, date, date.plusDays(1));
+            BigDecimal value = jdbcTemplate.queryForObject(
+                    sql,
+                    BigDecimal.class,
+                    date,
+                    date.plusDays(1),
+                    date,
+                    date.plusDays(1)
+            );
             return value != null ? value : BigDecimal.ZERO;
         } catch (DataAccessException ex) {
             log.warn("Could not calculate visitor revenue: {}", ex.getMessage());
-            return sumRevenueToday(date);
+            return BigDecimal.ZERO;
         }
     }
 
