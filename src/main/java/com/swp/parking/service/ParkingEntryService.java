@@ -46,11 +46,11 @@ public class ParkingEntryService {
         ensureOperationalTables();
 
         String licensePlate = normalizePlate(request.getLicensePlate());
-        String vehicleType = normalizeVehicleType(request.getVehicleType(), licensePlate);
-
         if (licensePlate.isBlank()) {
             throw new AppException(HttpStatus.BAD_REQUEST, "Nhap bien so xe de kiem tra");
         }
+
+        String vehicleType = normalizeVehicleType(request.getVehicleType(), licensePlate);
 
         if (hasActiveOrder(licensePlate)) {
             return invalid(licensePlate, vehicleType, "Xe nay dang co phien gui xe ACTIVE");
@@ -59,6 +59,9 @@ public class ParkingEntryService {
         Optional<MonthlyVehicle> monthlyVehicle = findActiveMonthlyVehicle(licensePlate);
         if (monthlyVehicle.isPresent()) {
             MonthlyVehicle vehicle = monthlyVehicle.get();
+            if (isVehicleTypeMismatch(vehicleType, vehicle.getVehicleType())) {
+                return monthlyTypeMismatch(vehicle, vehicleType);
+            }
             return ParkingEntryResponse.builder()
                     .entryType("MONTHLY")
                     .registered(true)
@@ -78,6 +81,12 @@ public class ParkingEntryService {
                     .build();
         }
 
+        Optional<RegisteredVehicle> registeredVehicle = findRegisteredVehicle(licensePlate);
+        if (registeredVehicle.isPresent() && isVehicleTypeMismatch(vehicleType, registeredVehicle.get().getVehicleType())) {
+            RegisteredVehicle vehicle = registeredVehicle.get();
+            return registeredTypeMismatch(vehicle, vehicleType);
+        }
+
         String nextCard = findFirstAvailableVisitorCard(vehicleType)
                 .orElseThrow(() -> new AppException(HttpStatus.CONFLICT,
                         "Da het 100 the vang lai kha dung cho " + displayVehicleType(vehicleType)))
@@ -93,10 +102,16 @@ public class ParkingEntryService {
 
         String licensePlate = normalizePlate(request.getLicensePlate());
         String requestedVisitorCard = normalizeCode(request.getVisitorCardCode());
-        String vehicleType = normalizeVehicleType(request.getVehicleType(), licensePlate);
-
         if (licensePlate.isBlank()) {
             throw new AppException(HttpStatus.BAD_REQUEST, "Can nhap bien so de tao phien xe vao");
+        }
+
+        String vehicleType = normalizeVehicleType(request.getVehicleType(), licensePlate);
+
+        Optional<RegisteredVehicle> registeredVehicle = findRegisteredVehicle(licensePlate);
+        if (registeredVehicle.isPresent() && isVehicleTypeMismatch(vehicleType, registeredVehicle.get().getVehicleType())) {
+            throw new AppException(HttpStatus.CONFLICT,
+                    vehicleTypeMismatchMessage(registeredVehicle.get().getVehicleType(), vehicleType));
         }
 
         Optional<MonthlyVehicle> monthlyVehicle = findActiveMonthlyVehicle(licensePlate);
@@ -201,6 +216,39 @@ public class ParkingEntryService {
                 .build();
     }
 
+    private ParkingEntryResponse monthlyTypeMismatch(MonthlyVehicle vehicle, String requestedVehicleType) {
+        return ParkingEntryResponse.builder()
+                .entryType("INVALID")
+                .registered(true)
+                .hasActiveSubscription(true)
+                .vehicleId(vehicle.getVehicleId())
+                .customerName(vehicle.getCustomerName())
+                .vehicleBrand(vehicle.getBrand())
+                .vehicleColor(vehicle.getColor())
+                .licensePlate(vehicle.getLicensePlate())
+                .vehicleType(displayVehicleType(vehicle.getVehicleType()))
+                .monthlyPackageName(vehicle.getPackageName())
+                .subscriptionEndDate(vehicle.getEndDate())
+                .sessionStatus("Sai loai xe da dang ky")
+                .canConfirm(false)
+                .message(vehicleTypeMismatchMessage(vehicle.getVehicleType(), requestedVehicleType))
+                .build();
+    }
+
+    private ParkingEntryResponse registeredTypeMismatch(RegisteredVehicle vehicle, String requestedVehicleType) {
+        return ParkingEntryResponse.builder()
+                .entryType("INVALID")
+                .registered(true)
+                .hasActiveSubscription(false)
+                .vehicleId(vehicle.getVehicleId())
+                .licensePlate(vehicle.getLicensePlate())
+                .vehicleType(displayVehicleType(vehicle.getVehicleType()))
+                .sessionStatus("Sai loai xe da dang ky")
+                .canConfirm(false)
+                .message(vehicleTypeMismatchMessage(vehicle.getVehicleType(), requestedVehicleType))
+                .build();
+    }
+
     private ParkingEntryResponse invalid(String licensePlate, String vehicleType, String message) {
         return ParkingEntryResponse.builder()
                 .entryType("INVALID")
@@ -265,6 +313,35 @@ public class ParkingEntryService {
             ).stream().findFirst();
 
          } catch (Exception ex) {
+            return Optional.empty();
+         }
+    }
+
+    private Optional<RegisteredVehicle> findRegisteredVehicle(String licensePlate) {
+        if (licensePlate.isBlank()) {
+            return Optional.empty();
+        }
+
+        try {
+            return jdbcTemplate.query("""
+                    SELECT v.vehicle_id,
+                           v.license_plate,
+                           vt.type_name AS vehicle_type
+                    FROM vehicles v
+                    LEFT JOIN vehicle_types vt ON vt.vehicle_type_id = v.vehicle_type_id
+                    WHERE regexp_replace(upper(v.license_plate), '[^A-Z0-9]', '', 'g') = ?
+                    ORDER BY v.vehicle_id DESC
+                    LIMIT 1
+                    """,
+                    (rs, rowNum) -> RegisteredVehicle.builder()
+                            .vehicleId(rs.getLong("vehicle_id"))
+                            .licensePlate(rs.getString("license_plate"))
+                            .vehicleType(rs.getString("vehicle_type"))
+                            .build(),
+                    compactPlate(licensePlate)
+            ).stream().findFirst();
+        } catch (Exception ex) {
+            log.warn("Cannot resolve registered vehicle type for plate {}: {}", licensePlate, ex.getMessage());
             return Optional.empty();
         }
     }
@@ -632,6 +709,22 @@ public class ParkingEntryService {
         return text.replaceAll("[^A-Z0-9]+", " ").trim().replaceAll("\\s+", " ");
     }
 
+    private boolean isVehicleTypeMismatch(String requestedVehicleType, String registeredVehicleType) {
+        String registeredToken = resolveVehicleTypeToken(registeredVehicleType);
+        if (registeredToken.isBlank()) {
+            return false;
+        }
+        return !registeredToken.equals(resolveVehicleTypeToken(requestedVehicleType));
+    }
+
+    private String vehicleTypeMismatchMessage(String registeredVehicleType, String requestedVehicleType) {
+        return "Bien so nay da dang ky la "
+                + displayVehicleType(registeredVehicleType)
+                + ", khong phai "
+                + displayVehicleType(requestedVehicleType)
+                + ". Vui long chon dung loai xe truoc khi kiem tra/xac nhan.";
+    }
+
     private String compactPlate(String value) {
         return normalizePlate(value).replaceAll("[^A-Z0-9]", "");
     }
@@ -666,6 +759,15 @@ public class ParkingEntryService {
     }
 
     private record VehicleTypeRef(Long id, String typeCode, String typeName) {
+    }
+
+    @Data
+    @Builder
+    @AllArgsConstructor
+    private static class RegisteredVehicle {
+        private Long vehicleId;
+        private String licensePlate;
+        private String vehicleType;
     }
 
     @Data

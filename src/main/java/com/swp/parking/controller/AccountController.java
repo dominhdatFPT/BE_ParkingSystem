@@ -2,6 +2,7 @@ package com.swp.parking.controller;
 
 import com.swp.parking.dto.request.ChangeRoleRequest;
 import com.swp.parking.dto.request.CreateAccountRequest;
+import com.swp.parking.dto.request.UpdateAccountPhoneRequest;
 import com.swp.parking.dto.response.AccountUserResponse;
 import com.swp.parking.dto.response.ApiResponse;
 import com.swp.parking.service.AccountService;
@@ -55,6 +56,15 @@ public class AccountController {
     public ApiResponse<Void> updateUserStatus(@PathVariable Long userId) {
         accountService.updateUserStatus(userId);
         return ApiResponse.success(null, "Cập nhật trạng thái thành công");
+    }
+
+    @PatchMapping("/users/{userId}/phone")
+    @PreAuthorize("hasAnyRole('ADMIN', 'STAFF')")
+    public ApiResponse<AccountUserResponse> updateUserPhone(
+            @PathVariable Long userId,
+            @Valid @RequestBody UpdateAccountPhoneRequest request) {
+        return ApiResponse.success(accountService.updateUserPhone(userId, request.getPhone()),
+                "Cap nhat so dien thoai thanh cong");
     }
 
     @PatchMapping("/users/{userId}/role")

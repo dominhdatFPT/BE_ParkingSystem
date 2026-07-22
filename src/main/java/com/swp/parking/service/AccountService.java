@@ -40,6 +40,8 @@ public class AccountService {
     private static final String STATUS_INACTIVE = "INACTIVE";
     private static final Pattern GMAIL_EMAIL_PATTERN =
             Pattern.compile(com.swp.parking.validation.ValidationPatterns.GMAIL_EMAIL, Pattern.CASE_INSENSITIVE);
+    private static final Pattern PHONE_PATTERN =
+            Pattern.compile(com.swp.parking.validation.ValidationPatterns.OPTIONAL_VIETNAM_PHONE);
     private static final Set<UserRole> VALID_ROLES =
             Set.of(UserRole.USER, UserRole.STAFF, UserRole.ADMIN);
     private static final List<UserRole> STAFF_ROLES =
@@ -137,7 +139,7 @@ public class AccountService {
         User user = User.builder()
                 .fullName(request.getFullName().trim())
                 .email(email)
-                .phone(normalizeOptional(request.getPhone()))
+                .phone(normalizePhone(request.getPhone()))
                 .password(passwordEncoder.encode(request.getPassword()))
                 .role(role)
                 .status("ACTIVE")
@@ -182,6 +184,14 @@ public class AccountService {
             emp.setStatus(newStatus);
             employeeRepository.save(emp);
         });
+    }
+
+    public AccountUserResponse updateUserPhone(Long userId, String phone) {
+        User user = accountUserRepository.findById(userId)
+                .orElseThrow(() -> new NotFoundException("KhÃ´ng tÃ¬m tháº¥y user vá»›i id: " + userId));
+
+        user.setPhone(normalizePhone(phone));
+        return mapToAccountUserResponse(accountUserRepository.save(user));
     }
 
     public void updateUserRole(Long userId, String role) {
@@ -260,12 +270,19 @@ public class AccountService {
         return trimmed.isEmpty() ? null : trimmed.toUpperCase();
     }
 
-    private String normalizeOptional(String value) {
+    private String normalizePhone(String value) {
         if (value == null) {
             return null;
         }
         String trimmed = value.trim();
-        return trimmed.isEmpty() ? null : trimmed;
+        if (trimmed.isEmpty()) {
+            return null;
+        }
+        if (!PHONE_PATTERN.matcher(trimmed).matches()) {
+            throw new AppException(HttpStatus.BAD_REQUEST,
+                    "Phone number must be 10-11 digits and start with 0");
+        }
+        return trimmed;
     }
 
     private String normalizeEmail(String value) {
