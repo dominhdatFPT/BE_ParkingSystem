@@ -105,6 +105,10 @@ public class FeeSubscriptionService {
                 .build();
     }
 
+    /**
+     * Hủy gói cước cho chính chủ xe (driver tự hủy qua trang cá nhân).
+     * Dùng chung {@link #cancelCore} với luồng admin để hai bên không lệch nghiệp vụ.
+     */
     public void cancelSubscription(Long userId, Long subscriptionId) {
         log.info("Cancelling subscription id: {} for userId: {}", subscriptionId, userId);
 
@@ -115,29 +119,36 @@ public class FeeSubscriptionService {
             throw new VehicleNotOwnedByUserException();
         }
 
-        if (subscription.getStatus() != SubscriptionStatus.ACTIVE) {
-            throw new InvalidSubscriptionStatusException("Chỉ có thể hủy gói đang hoạt động");
-        }
-
-        subscription.setStatus(SubscriptionStatus.CANCELLED);
-        feeSubscriptionRepository.save(subscription);
-        markPendingInvoiceFailed(subscription, "Da huy boi nguoi dung");
+        cancelCore(subscription, "Da huy boi nguoi dung");
     }
 
+    /**
+     * Hủy gói cước bởi admin/staff (không cần kiểm tra quyền sở hữu xe).
+     * Dùng chung {@link #cancelCore} với luồng driver để hai bên không lệch nghiệp vụ.
+     */
     public void cancelSubscriptionAdmin(Long subscriptionId) {
         log.info("Admin cancelling subscription id: {}", subscriptionId);
 
         FeeSubscription subscription = feeSubscriptionRepository.findById(subscriptionId)
                 .orElseThrow(() -> new SubscriptionNotFoundException(subscriptionId));
 
+        cancelCore(subscription, "Da huy boi admin/staff");
+    }
+
+    /**
+     * Logic hủy dùng chung cho cả driver lẫn admin: chỉ cho hủy gói đang ACTIVE hoặc
+     * PENDING_PAYMENT, luôn tắt tự động gia hạn, và đánh dấu hóa đơn treo là FAILED.
+     */
+    private void cancelCore(FeeSubscription subscription, String message) {
         if (subscription.getStatus() != SubscriptionStatus.ACTIVE
                 && subscription.getStatus() != SubscriptionStatus.PENDING_PAYMENT) {
             throw new InvalidSubscriptionStatusException("Chi co the huy goi dang hoat dong hoac cho thanh toan");
         }
 
         subscription.setStatus(SubscriptionStatus.CANCELLED);
+        subscription.setIsAutoRenew(false);
         feeSubscriptionRepository.save(subscription);
-        markPendingInvoiceFailed(subscription, "Da huy boi admin/staff");
+        markPendingInvoiceFailed(subscription, message);
     }
 
     public void paySubscriptionAdmin(Long subscriptionId) {

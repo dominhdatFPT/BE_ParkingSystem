@@ -38,9 +38,9 @@ import java.util.stream.Collectors;
  *   1. Danh sách xe của user (để chọn khi đăng ký)
  *   2. Đăng ký thẻ tháng → tạo PaymentIntent Stripe
  *   3. Kích hoạt subscription khi Stripe xác nhận thanh toán thành công
- *   4. Hủy subscription theo ID
- *   5. Hủy tự động gia hạn (cancel auto-renew)
- *   6. Xem lịch sử thẻ tháng của user
+ *   4. Hủy tự động gia hạn (cancel auto-renew)
+ *   5. Xem lịch sử thẻ tháng của user
+ *   (Hủy subscription theo ID nay dùng chung logic ở FeeSubscriptionService)
  */
 @Slf4j
 @Service
@@ -380,35 +380,9 @@ public class SubscriptionService {
 
     // ─────────────────────────────────────────────────────────────────
     // 5. Hủy subscription theo ID
+    // Lưu ý: logic hủy nay dùng chung với luồng admin/staff, xem
+    // FeeSubscriptionService#cancelSubscription / #cancelSubscriptionAdmin.
     // ─────────────────────────────────────────────────────────────────
-
-    /**
-     * Hủy subscription đang ACTIVE theo ID.
-     * Đồng thời xóa partnerToken để ngăn auto-renew tiếp theo.
-     * Chỉ chủ sở hữu xe mới được hủy.
-     */
-    @Transactional
-    public SubscriptionResponse cancelSubscription(Long userId, Long subscriptionId) {
-        FeeSubscription subscription = subscriptionRepository.findById(subscriptionId)
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        "Không tìm thấy subscription: " + subscriptionId));
-
-        if (!vehicleRepository.existsByIdAndCustomer_User_Id(subscription.getVehicle().getId(), userId)) {
-            throw new AppException(HttpStatus.FORBIDDEN, "Bạn không có quyền hủy gói này");
-        }
-
-        if (!SubscriptionStatus.ACTIVE.equals(subscription.getStatus())
-                && !SubscriptionStatus.PENDING_PAYMENT.equals(subscription.getStatus())) {
-            throw new AppException(HttpStatus.CONFLICT, "Chỉ có thể hủy gói đang hoạt động hoặc chờ thanh toán");
-        }
-
-        subscription.setStatus(SubscriptionStatus.CANCELLED);
-        subscription.setIsAutoRenew(false);
-        subscriptionRepository.save(subscription);
-
-        log.info("User {} hủy subscription {}", userId, subscriptionId);
-        return mapToResponse(subscription);
-    }
 
     // ─────────────────────────────────────────────────────────────────
     // 4b. Hủy subscription PENDING_PAYMENT (dùng khi MoMo return thất bại)
