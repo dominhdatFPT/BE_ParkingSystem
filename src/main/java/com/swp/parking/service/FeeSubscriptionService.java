@@ -9,6 +9,7 @@ import com.swp.parking.exception.SubscriptionNotFoundException;
 import com.swp.parking.exception.VehicleAlreadyHasActiveSubscriptionException;
 import com.swp.parking.exception.VehicleNotOwnedByUserException;
 import com.swp.parking.model.*;
+import com.swp.parking.model.enums.InvoiceStatus;
 import com.swp.parking.model.enums.SubscriptionStatus;
 import com.swp.parking.repository.*;
 import lombok.RequiredArgsConstructor;
@@ -33,6 +34,7 @@ public class FeeSubscriptionService {
     private final FeePackagePriceHistoryRepository priceHistoryRepository;
     private final FeeSubscriptionRepository feeSubscriptionRepository;
     private final VehicleTypeRepository vehicleTypeRepository;
+    private final FeeSubscriptionInvoiceRepository feeSubscriptionInvoiceRepository;
 
     @Transactional(readOnly = true)
     public List<MyVehicleResponse> getMyVehicles(Long userId, Long vehicleTypeId) {
@@ -119,6 +121,7 @@ public class FeeSubscriptionService {
 
         subscription.setStatus(SubscriptionStatus.CANCELLED);
         feeSubscriptionRepository.save(subscription);
+        markPendingInvoiceFailed(subscription, "Da huy boi nguoi dung");
     }
 
     public void cancelSubscriptionAdmin(Long subscriptionId) {
@@ -134,6 +137,7 @@ public class FeeSubscriptionService {
 
         subscription.setStatus(SubscriptionStatus.CANCELLED);
         feeSubscriptionRepository.save(subscription);
+        markPendingInvoiceFailed(subscription, "Da huy boi admin/staff");
     }
 
     public void paySubscriptionAdmin(Long subscriptionId) {
@@ -151,6 +155,44 @@ public class FeeSubscriptionService {
         subscription.setStartDate(start);
         subscription.setEndDate(start.plusMonths(subscription.getFeePackage().getDurationMonths()));
         feeSubscriptionRepository.save(subscription);
+        markInvoicePaid(subscription, "Da xac nhan thu tien mat boi admin/staff tai quay");
+    }
+
+    /**
+     * Đánh dấu hóa đơn PENDING gần nhất của subscription là SUCCESS.
+     * Nếu chưa có hóa đơn nào (subscription được tạo qua luồng không phát hành invoice),
+     * tạo mới một hóa đơn SUCCESS để lịch sử thanh toán phản ánh đúng thực tế.
+     */
+    private void markInvoicePaid(FeeSubscription subscription, String message) {
+        feeSubscriptionInvoiceRepository
+                .findByFeeSubscriptionIdOrderByCreatedAtDesc(subscription.getId()).stream()
+                .filter(inv -> InvoiceStatus.PENDING.equals(inv.getStatus()))
+                .findFirst()
+                .ifPresentOrElse(
+                        inv -> {
+                            inv.setStatus(InvoiceStatus.SUCCESS);
+                            inv.setMessage(message);
+                            feeSubscriptionInvoiceRepository.save(inv);
+                        },
+                        () -> feeSubscriptionInvoiceRepository.save(FeeSubscriptionInvoice.builder()
+                                .feeSubscription(subscription)
+                                .amount(subscription.getAmountToPay())
+                                .status(InvoiceStatus.SUCCESS)
+                                .type("INITIAL")
+                                .message(message)
+                                .build()));
+    }
+
+    /** Đánh dấu (các) hóa đơn PENDING của subscription là FAILED khi subscription bị hủy. */
+    private void markPendingInvoiceFailed(FeeSubscription subscription, String message) {
+        feeSubscriptionInvoiceRepository
+                .findByFeeSubscriptionIdOrderByCreatedAtDesc(subscription.getId()).stream()
+                .filter(inv -> InvoiceStatus.PENDING.equals(inv.getStatus()))
+                .forEach(inv -> {
+                    inv.setStatus(InvoiceStatus.FAILED);
+                    inv.setMessage(message);
+                    feeSubscriptionInvoiceRepository.save(inv);
+                });
     }
 
     @Transactional(readOnly = true)
@@ -183,6 +225,7 @@ public class FeeSubscriptionService {
         subscription.setStartDate(start);
         subscription.setEndDate(start.plusMonths(subscription.getFeePackage().getDurationMonths()));
         feeSubscriptionRepository.save(subscription);
+        markInvoicePaid(subscription, "Da xac nhan thanh toan");
         return getMySubscriptions(userId).stream()
                 .filter(item -> subscriptionId.equals(item.get("id")))
                 .findFirst().orElseThrow();
