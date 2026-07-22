@@ -115,6 +115,11 @@ public class AuthService {
                     "Google account does not expose an email address");
         }
 
+        if (!Boolean.TRUE.equals(decodedToken.isEmailVerified())) {
+            throw new AppException(HttpStatus.FORBIDDEN,
+                    "Email Google chưa được xác minh, không thể đăng nhập");
+        }
+
         User user = findOrCreateGoogleUser(email, decodedToken.getName());
 
         if ("INACTIVE".equals(user.getStatus())) {
