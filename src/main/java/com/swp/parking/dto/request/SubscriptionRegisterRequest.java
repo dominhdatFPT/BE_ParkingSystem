@@ -13,6 +13,6 @@ public class SubscriptionRegisterRequest {
     @NotNull(message = "planId không được để trống")
     private Long planId;
 
-    /** true = bật tự động gia hạn định kỳ qua MoMo Token */
+    /** true = bat tu dong gia han dinh ky. */
     private boolean autoRenew;
 }

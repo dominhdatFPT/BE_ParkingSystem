@@ -130,7 +130,6 @@ function Get-DomainName {
         "FeePackagePriceHistory" = "lịch sử giá gói phí"
         "FeeSubscription" = "đăng ký gói phí"
         "FeeSubscriptionInvoice" = "hóa đơn gói phí"
-        "MomoOrder" = "đơn thanh toán MoMo"
         "Notification" = "thông báo"
         "ParkingAreaSummary" = "tổng hợp khu vực đỗ xe"
         "ParkingEntry" = "xe vào bãi"

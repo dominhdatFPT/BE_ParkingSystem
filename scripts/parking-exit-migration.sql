@@ -98,7 +98,7 @@ CREATE TABLE IF NOT EXISTS parking_order_payments (
     updated_at timestamp NOT NULL DEFAULT now(),
     CONSTRAINT uq_parking_order_payment UNIQUE (order_id),
     CONSTRAINT chk_parking_payment_amount CHECK (amount >= 0),
-    CONSTRAINT chk_parking_payment_method CHECK (payment_method IN ('CASH', 'MOMO', 'BANK_TRANSFER')),
+    CONSTRAINT chk_parking_payment_method CHECK (payment_method IN ('CASH', 'BANK_TRANSFER', 'STRIPE')),
     CONSTRAINT chk_parking_payment_status CHECK (payment_status IN ('UNPAID', 'PAID', 'FAILED', 'REFUNDED'))
 );
 

@@ -52,7 +52,6 @@ public class SubscriptionService {
     private final FeePackageRepository packageRepository;
     private final FeePackagePriceHistoryRepository priceHistoryRepository;
     private final VehicleRepository vehicleRepository;
-    private final CryptoService cryptoService;
     private final StripeService stripeService;
     private final StripeOrderRepository stripeOrderRepository;
 
@@ -272,7 +271,7 @@ public class SubscriptionService {
     // ─────────────────────────────────────────────────────────────────
 
     /**
-     * Dùng cho các luồng thanh toán được xác nhận thủ công như MoMo.
+     * Dung cho cac luong thanh toan duoc xac nhan thu cong.
      * Chuyển subscription PENDING_PAYMENT → ACTIVE và invoice PENDING → SUCCESS.
      *
      * @param transactionNo Mã giao dịch từ kênh thanh toán.
@@ -411,7 +410,7 @@ public class SubscriptionService {
     }
 
     // ─────────────────────────────────────────────────────────────────
-    // 4b. Hủy subscription PENDING_PAYMENT (dùng khi MoMo return thất bại)
+    // 4b. Huy subscription PENDING_PAYMENT khi thanh toan that bai
     // ─────────────────────────────────────────────────────────────────
 
     @Transactional
@@ -480,8 +479,6 @@ public class SubscriptionService {
                 .map(inv -> SubscriptionInvoiceResponse.builder()
                         .id(inv.getId())
                         .subscriptionId(inv.getFeeSubscription().getId())
-                        .momoOrderId(inv.getMomoOrderId())
-                        .momoTransId(inv.getMomoTransId())
                         .stripePaymentIntentId(inv.getStripePaymentIntentId())
                         .amount(inv.getAmount())
                         .status(inv.getStatus().name())

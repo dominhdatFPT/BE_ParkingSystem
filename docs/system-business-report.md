@@ -42,7 +42,7 @@ Chức năng chính:
 - Theo dõi trạng thái hồ sơ đăng ký xe.
 - Xem danh sách xe đã được duyệt/đăng ký.
 - Chọn gói biểu phí cho xe đã đăng ký.
-- Thanh toán khoản chờ thanh toán bằng VNPay/MoMo nếu hệ thống tạo invoice.
+- Thanh toán khoản chờ thanh toán bằng cổng thanh toán đang được tích hợp nếu hệ thống tạo invoice.
 - Xem thông báo cá nhân.
 - Gửi yêu cầu hỗ trợ/sự cố.
 - Xem và cập nhật hồ sơ cá nhân.
@@ -295,15 +295,14 @@ API VNPay có các chức năng:
 - Nhận return callback.
 - Hủy order nếu còn phù hợp.
 
-### 7.2 Thanh toán MoMo
+### 7.2 Thanh toán Stripe
 
-Hệ thống có module MoMo order:
+Hệ thống có module Stripe order:
 
-- Xem trạng thái order.
-- Xem order của tôi.
-- Xem order pending.
-- Admin xác nhận order.
-- Hủy order.
+- Tạo PaymentIntent cho hóa đơn/giao dịch.
+- Xác nhận trạng thái order.
+- Nhận webhook từ Stripe.
+- Cập nhật invoice/subscription hoặc phiên gửi xe khi thanh toán thành công.
 
 ### 7.3 Thanh toán tiền mặt
 
@@ -497,7 +496,6 @@ Các entity quan trọng:
 | `ParkingFloor` | Tầng bãi |
 | `ParkingZone` | Khu trong tầng/bãi |
 | `VNPayOrder` | Order thanh toán VNPay |
-| `MomoOrder` | Order thanh toán MoMo |
 | `Notification` | Thông báo |
 | `DeviceToken` | Token thiết bị nhận push notification |
 | `RefreshToken` | Refresh token |
@@ -588,14 +586,6 @@ VNPay:
 - `/api/payments/vnpay/ipn`
 - `/api/payments/vnpay/return`
 - `/api/payments/vnpay/orders/{txnRef}/cancel`
-
-MoMo:
-
-- `/api/payments/momo-orders/{orderId}/status`
-- `/api/payments/momo-orders/my`
-- `/api/payments/momo-orders/pending`
-- `/api/payments/momo-orders/{orderId}/admin-confirm`
-- `/api/payments/momo-orders/{orderId}/cancel`
 
 Dev VNPay mock:
 

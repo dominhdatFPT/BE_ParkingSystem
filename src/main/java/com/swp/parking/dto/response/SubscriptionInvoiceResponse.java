@@ -14,11 +14,6 @@ public class SubscriptionInvoiceResponse {
 
     private Long subscriptionId;
 
-    // ── MoMo (legacy — dữ liệu cũ) ──────────────────────────────────
-    private String momoOrderId;
-    private Long momoTransId;
-
-    // ── Stripe ───────────────────────────────────────────────────────
     private String stripePaymentIntentId;
 
     private BigDecimal amount;

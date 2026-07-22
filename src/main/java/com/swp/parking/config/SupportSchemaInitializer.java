@@ -89,7 +89,7 @@ public class SupportSchemaInitializer implements ApplicationRunner {
         jdbcTemplate.execute("""
                 ALTER TABLE parking_order_payments
                 ADD CONSTRAINT chk_parking_payment_method
-                CHECK (payment_method IN ('CASH', 'MOMO', 'BANK_TRANSFER', 'STRIPE')) NOT VALID
+                CHECK (payment_method IN ('CASH', 'BANK_TRANSFER', 'STRIPE')) NOT VALID
                 """);
         jdbcTemplate.execute("""
                 CREATE TABLE IF NOT EXISTS stripe_order (

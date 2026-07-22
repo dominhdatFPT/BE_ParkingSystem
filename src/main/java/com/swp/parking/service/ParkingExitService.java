@@ -547,7 +547,7 @@ public class ParkingExitService {
     private String normalizePaymentMethod(String value) {
         String normalized = value == null ? "CASH" : value.trim().toUpperCase(Locale.ROOT);
         return switch (normalized) {
-            case "MOMO", "BANK_TRANSFER", "STRIPE" -> normalized;
+            case "BANK_TRANSFER", "STRIPE" -> normalized;
             default -> "CASH";
         };
     }
