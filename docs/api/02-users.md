@@ -1,31 +1,17 @@
-# Users API
+# Users API (Deprecated)
 
-> Quản lý người dùng.
+> **Đã gộp vào AccountController.** Xem `docs/api/` — file tài liệu AccountController.
+>
+> File `UserController.java`, `UserService.java`, `UserResponse.java` đã bị xóa.
+> Tất cả endpoint CRUD user hiện nằm tại `/api/v1/admin/accounts/...`.
 
-## Endpoints
+## Endpoints cũ (không còn tồn tại)
 
-| Method | Endpoint | Mô tả | Auth |
-|--------|----------|-------|------|
-| `GET` | `/api/v1/users` | Lấy danh sách tất cả users | `ADMIN`, `STAFF` |
-| `GET` | `/api/v1/users/me` | Lấy thông tin user hiện tại | Authenticated |
-| `GET` | `/api/v1/users/{id}` | Lấy thông tin user theo ID | `ADMIN`, `STAFF` |
-| `POST` | `/api/v1/users` | Tạo user mới | `ADMIN`, `STAFF` |
-| `PUT` | `/api/v1/users/{id}` | Cập nhật user | `ADMIN`, `STAFF` |
-| `DELETE` | `/api/v1/users/{id}` | Xóa user | `ADMIN`, `STAFF` |
-
-## Chi tiết
-
-### `GET /api/v1/users/me`
-
-Lấy thông tin user từ JWT token hiện tại.
-
-### `POST /api/v1/users`
-
-Request body sử dụng entity `User` trực tiếp.
-
-## File liên quan
-
-- Controller: `src/main/java/com/swp/parking/controller/UserController.java`
-- Service: `src/main/java/com/swp/parking/service/UserService.java`
-- DTO Response: `src/main/java/com/swp/parking/dto/response/UserResponse.java`
-- Entity: `src/main/java/com/swp/parking/model/User.java`
+| Method | Endpoint | Thay thế bởi |
+|--------|----------|--------------|
+| `GET /api/v1/users` | Danh sách users | `GET /api/v1/admin/accounts/users` |
+| `GET /api/v1/users/me` | User hiện tại | JWT claims + `/api/v1/profile/*` |
+| `GET /api/v1/users/{id}` | Chi tiết user | `GET /api/v1/admin/accounts/{userId}` |
+| `POST /api/v1/users` | Tạo user | `POST /api/v1/admin/accounts` |
+| `PUT /api/v1/users/{id}` | Cập nhật user | `PATCH /api/v1/admin/accounts/{userId}/lock\|unlock` |
+| `DELETE /api/v1/users/{id}` | Xóa user | (chưa có tương đương an toàn) |

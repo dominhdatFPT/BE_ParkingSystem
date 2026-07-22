@@ -67,9 +67,6 @@ public class SecurityConfig {
                         // Admin/Staff management endpoints
                         .requestMatchers("/api/v1/admin/**").hasAnyRole("ADMIN", "STAFF")
                         .requestMatchers("/api/v1/staff/**").hasAnyRole("ADMIN", "STAFF")
-                        .requestMatchers("/api/v1/users").hasAnyRole("ADMIN", "STAFF")
-                        .requestMatchers(HttpMethod.GET, "/api/v1/users/me").authenticated()
-                        .requestMatchers("/api/v1/users/**").hasAnyRole("ADMIN", "STAFF")
                         .requestMatchers("/api/v1/parking-slots", "/api/v1/parking-slots/**").hasAnyRole("ADMIN", "STAFF")
                         .requestMatchers("/api/v1/parking-entry", "/api/v1/parking-entry/**").hasAnyRole("ADMIN", "STAFF")
                         .requestMatchers("/api/v1/parking-exit", "/api/v1/parking-exit/**").hasAnyRole("ADMIN", "STAFF")
