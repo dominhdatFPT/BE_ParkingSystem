@@ -27,6 +27,7 @@ import com.swp.parking.repository.UserRepository;
 import com.swp.parking.repository.VehicleRegistrationRepository;
 import com.swp.parking.repository.VehicleRepository;
 import com.swp.parking.repository.VehicleTypeRepository;
+import com.swp.parking.validation.ValidationPatterns;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -48,6 +49,8 @@ import java.util.stream.Collectors;
 @Slf4j
 @RequiredArgsConstructor
 public class VehicleRegistrationService {
+
+    private static final Pattern LICENSE_PLATE_PATTERN = Pattern.compile(ValidationPatterns.LICENSE_PLATE);
 
     private final VehicleRegistrationRepository registrationRepository;
     private final VehicleTypeRepository vehicleTypeRepository;
@@ -200,6 +203,10 @@ public class VehicleRegistrationService {
         if (submittedPlate.isBlank()) {
             throw new AppException(HttpStatus.BAD_REQUEST,
                     "Vui long nhap bien so xe");
+        }
+        if (!LICENSE_PLATE_PATTERN.matcher(submittedPlate).matches()) {
+            throw new AppException(HttpStatus.BAD_REQUEST,
+                    "Bien so xe khong dung dinh dang");
         }
 
         if (registrationRepository.existsByLicensePlateAndIsDeletedFalse(submittedPlate)) {
