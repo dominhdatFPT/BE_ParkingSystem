@@ -6,6 +6,7 @@ import com.swp.parking.dto.response.MyVehicleResponse;
 import com.swp.parking.dto.response.RegisterSubscriptionStripeResponse;
 import com.swp.parking.dto.response.SubscriptionInvoiceResponse;
 import com.swp.parking.dto.response.SubscriptionResponse;
+import com.swp.parking.service.FeeSubscriptionService;
 import com.swp.parking.service.SubscriptionService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -22,7 +23,7 @@ import java.util.List;
  * <pre>
  * GET    /api/subscriptions/my-vehicles     – danh sách xe để chọn đăng ký
  * POST   /api/subscriptions/register-stripe – đăng ký thẻ tháng → Stripe clientSecret
- * PATCH  /api/subscriptions/{id}/cancel     – hủy thẻ tháng đang ACTIVE
+ * PATCH  /api/subscriptions/{id}/cancel     – hủy thẻ tháng đang ACTIVE/PENDING_PAYMENT
  * POST   /api/subscriptions/cancel-renew    – tắt tự động gia hạn
  * GET    /api/subscriptions/my              – lịch sử thẻ tháng của user
  * </pre>
@@ -33,6 +34,7 @@ import java.util.List;
 public class SubscriptionController {
 
     private final SubscriptionService subscriptionService;
+    private final FeeSubscriptionService feeSubscriptionService;
 
     /**
      * Lấy danh sách phương tiện của user.
@@ -60,13 +62,14 @@ public class SubscriptionController {
     }
 
     /**
-     * Hủy thẻ tháng đang ACTIVE theo ID.
-     * Subscription chuyển ngay sang CANCELLED, partnerToken bị xóa để ngăn auto-renew.
+     * Hủy thẻ tháng đang ACTIVE hoặc PENDING_PAYMENT theo ID.
+     * Dùng chung {@link FeeSubscriptionService#cancelSubscription} với luồng admin/staff
+     * (trang quản lý tài khoản) để hai bên luôn hủy theo cùng một quy tắc.
      */
     @PatchMapping("/{id}/cancel")
-    public ResponseEntity<ApiResponse<SubscriptionResponse>> cancelSubscription(@PathVariable Long id) {
-        SubscriptionResponse data = subscriptionService.cancelSubscription(getCurrentUserId(), id);
-        return ResponseEntity.ok(ApiResponse.success(data, "Hủy thẻ tháng thành công"));
+    public ResponseEntity<ApiResponse<Void>> cancelSubscription(@PathVariable Long id) {
+        feeSubscriptionService.cancelSubscription(getCurrentUserId(), id);
+        return ResponseEntity.ok(ApiResponse.success(null, "Hủy thẻ tháng thành công"));
     }
 
     /**
