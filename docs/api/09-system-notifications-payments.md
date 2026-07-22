@@ -1,6 +1,6 @@
 # System, Notifications, Support and Payments API
 
-Tài liệu các endpoint còn lại ngoài tám module nghiệp vụ chính.
+Tai lieu cac endpoint con lai ngoai tam module nghiep vu chinh.
 
 ## Notifications
 
@@ -19,7 +19,7 @@ Tài liệu các endpoint còn lại ngoài tám module nghiệp vụ chính.
 | `PATCH` | `/api/customer/notifications/{id}/read` | Authenticated |
 | `PATCH` | `/api/customer/notifications/read-all` | Authenticated |
 
-## Support, incidents and system data
+## Support, Incidents And System Data
 
 | Method | Endpoint | Auth |
 |--------|----------|------|
@@ -33,20 +33,24 @@ Tài liệu các endpoint còn lại ngoài tám module nghiệp vụ chính.
 | `PATCH` | `/api/v1/incidents/{id}/close` | `ADMIN`, `STAFF` |
 | `GET` | `/api/v1/audit-logs` | `ADMIN`, `STAFF` |
 
-## MoMo order APIs
+## Stripe Order APIs
 
 | Method | Endpoint | Auth |
 |--------|----------|------|
-| `GET` | `/api/payments/momo-orders/{orderId}/status` | Authenticated |
-| `GET` | `/api/payments/momo-orders/my` | Authenticated |
-| `GET` | `/api/payments/momo-orders/pending` | Authenticated |
-| `POST` | `/api/payments/momo-orders/{orderId}/admin-confirm` | Authenticated |
-| `POST` | `/api/payments/momo-orders/{orderId}/cancel` | Authenticated |
+| `POST` | `/api/payments/stripe/orders/{paymentIntentId}/confirm` | Authenticated |
+| `GET` | `/api/payments/stripe/orders/{paymentIntentId}/status` | Authenticated |
+| `POST` | `/api/payments/stripe/webhook` | Stripe webhook |
 
-> `SecurityConfig` hiện chưa giới hạn riêng hai endpoint MoMo dành cho admin.
+## Visitor Checkout Payments
 
-## Các prefix khác
+| Method | Endpoint | Auth |
+|--------|----------|------|
+| `POST` | `/api/v1/visitor-checkout/lookup` | Public |
+| `POST` | `/api/v1/visitor-checkout/stripe` | Public |
+| `POST` | `/api/v1/visitor-checkout/stripe/{paymentIntentId}/confirm` | Public |
 
-- `POST /api/ai/chat`: AI chat, cần JWT.
-- `/api/subscriptions/**`: flow subscription/MoMo thứ hai, cần JWT.
+## Other Prefixes
+
+- `POST /api/ai/chat`: AI chat, requires JWT.
+- `/api/subscriptions/**`: subscription flow, requires JWT.
 - `GET /api/v1/vehicle-types`: public.

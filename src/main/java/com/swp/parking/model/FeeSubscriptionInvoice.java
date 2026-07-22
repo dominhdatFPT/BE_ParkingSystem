@@ -1,7 +1,17 @@
 package com.swp.parking.model;
 
 import com.swp.parking.model.enums.InvoiceStatus;
-import jakarta.persistence.*;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -36,25 +46,13 @@ public class FeeSubscriptionInvoice {
     @Column(name = "status", nullable = false)
     private InvoiceStatus status;
 
-    // ── MoMo (legacy — giữ lại cho dữ liệu cũ) ──────────────────────
-    @Column(name = "momo_order_id", unique = true)
-    private String momoOrderId;
-
-    @Column(name = "momo_request_id")
-    private String momoRequestId;
-
-    @Column(name = "momo_trans_id")
-    private Long momoTransId;
-
-    // ── Stripe ───────────────────────────────────────────────────────
-    // PaymentIntent ID của Stripe (pi_xxx), liên kết với bảng stripe_order
     @Column(name = "stripe_payment_intent_id", length = 100)
     private String stripePaymentIntentId;
 
     @Column(name = "message", length = 512)
     private String message;
 
-    /** INITIAL = kỳ đầu | RENEWAL = gia hạn */
+    /** INITIAL | RENEWAL */
     @Column(name = "type", length = 20)
     private String type;
 

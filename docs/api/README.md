@@ -13,7 +13,7 @@ thanh toán, thông báo, hỗ trợ và vận hành xe vào/ra.
 | [05-vehicles.md](./05-vehicles.md) | Đăng ký thẻ xe, eKYC và xét duyệt hồ sơ |
 | [06-fee-subscriptions.md](./06-fee-subscriptions.md) | Biểu phí, đăng ký gói và hóa đơn |
 | [07-staff-operations.md](./07-staff-operations.md) | Xe vào, xe ra, phiên gửi xe và dashboard |
-| [09-system-notifications-payments.md](./09-system-notifications-payments.md) | Thông báo, hỗ trợ và MoMo |
+| [09-system-notifications-payments.md](./09-system-notifications-payments.md) | Thông báo, hỗ trợ và thanh toán |
 
 ## Endpoint chính dành cho người dùng
 
@@ -23,7 +23,7 @@ thanh toán, thông báo, hỗ trợ và vận hành xe vào/ra.
 | `GET` | `/api/v1/vehicle-registrations/my` | Hồ sơ đăng ký của người dùng |
 | `GET` | `/api/v1/fee-packages` | Danh sách biểu phí |
 | `GET` | `/api/v1/fee-subscriptions/my-vehicles` | Xe có thể mua gói |
-| `POST` | `/api/subscriptions/register` | Tạo đăng ký gói và đơn MoMo |
+| `POST` | `/api/subscriptions/register-stripe` | Tạo đăng ký gói và PaymentIntent Stripe |
 | `GET` | `/api/subscriptions/my` | Danh sách gói đã đăng ký |
 | `GET` | `/api/subscriptions/my-invoices` | Lịch sử hóa đơn |
 | `GET` | `/api/customer/notifications` | Thông báo của người dùng |

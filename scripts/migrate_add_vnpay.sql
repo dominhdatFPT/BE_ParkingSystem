@@ -26,7 +26,7 @@ COMMENT ON TABLE  vnpay_order IS 'Lưu trạng thái đơn hàng thanh toán qua
 COMMENT ON COLUMN vnpay_order.amount IS 'Số tiền VNĐ thực tế (chưa nhân 100 như VNPay yêu cầu)';
 COMMENT ON COLUMN vnpay_order.status IS 'PENDING | PAID | FAILED | CANCELLED';
 
--- 2. Thêm cột VNPay vào fee_subscription_invoice (giữ cột momo cũ để tương thích)
+-- 2. Them cot VNPay vao fee_subscription_invoice
 -- -----------------------------------------------------------------------------
 ALTER TABLE fee_subscription_invoice
     ADD COLUMN IF NOT EXISTS vnp_txn_ref        VARCHAR(50),
