@@ -24,7 +24,9 @@ public class CreateAccountRequest {
             message = "Email must be a Gmail address")
     private String email;
 
-    @Pattern(regexp = "^$|^[0-9]{10,11}$", message = "Phone number must be 10-11 digits")
+    @Pattern(
+            regexp = ValidationPatterns.OPTIONAL_VIETNAM_PHONE,
+            message = "Phone number must be 10-11 digits and start with 0")
     private String phone;
 
     @NotBlank(message = "Password is required")
