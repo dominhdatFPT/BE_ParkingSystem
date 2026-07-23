@@ -598,14 +598,13 @@ public class OperationsDashboardService {
                     %2$s AS customer_type,
                     COALESCE(vc_by_id.card_code, vc_by_order.card_code, substring(COALESCE(po.notes, '') from 'VISITOR_CARD=([^;]+)')) AS visitor_card_code,
                     pf.parking_name,
-                    fl.floor_name
+                    NULL AS floor_name
                 FROM parking_orders po
                 LEFT JOIN vehicles v ON v.vehicle_id = po.vehicle_id
                 LEFT JOIN vehicle_types vt ON vt.vehicle_type_id = COALESCE(po.vehicle_type_id, v.vehicle_type_id)
                 LEFT JOIN visitor_cards vc_by_id ON vc_by_id.visitor_card_id = COALESCE(po.visitor_card_id, po.card_id)
                 LEFT JOIN visitor_cards vc_by_order ON po.visitor_card_id IS NULL AND vc_by_order.current_order_id = po.order_id
                 LEFT JOIN parking_facilities pf ON pf.parking_id = po.parking_id
-                LEFT JOIN parking_floors fl ON fl.floor_id = po.floor_id
                 %3$s
                 ORDER BY po.updated_at DESC
                 LIMIT ? OFFSET ?
