@@ -46,7 +46,7 @@ public class AccountController {
 
     @PostMapping("/users")
     @ResponseStatus(HttpStatus.CREATED)
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'STAFF')")
     public ApiResponse<AccountUserResponse> createUser(@Valid @RequestBody CreateAccountRequest request) {
         return ApiResponse.success(accountService.createUser(request), "Tạo tài khoản thành công");
     }
