@@ -18,6 +18,9 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -134,6 +137,19 @@ public class AccountService {
             role = UserRole.valueOf(request.getRole().toUpperCase());
         } catch (IllegalArgumentException e) {
             throw new InvalidRoleException("Role không hợp lệ. Chỉ chấp nhận USER, STAFF hoặc ADMIN");
+        }
+
+        // Staff can only create USER accounts
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        boolean isStaffOnly = authentication != null
+                && authentication.getAuthorities().stream()
+                    .map(GrantedAuthority::getAuthority)
+                    .anyMatch(a -> a.equals("ROLE_STAFF"))
+                && authentication.getAuthorities().stream()
+                    .map(GrantedAuthority::getAuthority)
+                    .noneMatch(a -> a.equals("ROLE_ADMIN"));
+        if (isStaffOnly && role != UserRole.USER) {
+            throw new InvalidRoleException("Staff chỉ có thể tạo tài khoản với role USER");
         }
 
         User user = User.builder()
